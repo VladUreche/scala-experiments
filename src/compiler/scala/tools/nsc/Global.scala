@@ -844,7 +844,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter) extends Symb
     val flattenPhase       = phaseNamed("flatten")
     val mixinPhase         = phaseNamed("mixin")
     val cleanupPhase       = phaseNamed("cleanup")
-    val icodePhase         = phaseNamed("icode")
+    val icodePhase         = phaseNamed("dce")
     // inliner, closelim, dce
     val jvmPhase           = phaseNamed("jvm")
     

@@ -217,7 +217,13 @@ abstract class ICodeCheckers {
                   throw new CheckerException(incompatibleString) 
               }
               else {
-                val newStack = new TypeStack((s1.types, s2.types).zipped map lub)
+                val newStack: TypeStack = try {
+                    new TypeStack((s1.types, s2.types).zipped map lub)
+                } catch {
+                  case t: Exception =>
+                    println(t.toString + ": " + s1.types.toString + " vs " + s2.types.toString)
+                    new TypeStack(s1.types)
+                }
                 if (newStack.isEmpty || s1.types == s2.types) ()  // not interesting to report
                 else checkerDebug("Checker created new stack:\n  (%s, %s) => %s".format(s1, s2, newStack))
 
@@ -230,6 +236,7 @@ abstract class ICodeCheckers {
       }
 
       if (preds.nonEmpty) {
+        //println("block " + bl + "[" + isHandlerBlock + "] preds: " + preds)
         in(bl) = (preds map out.apply) reduceLeft meet2;      
         log("Input changed for block: " + bl +" to: " + in(bl));
       }
@@ -255,7 +262,7 @@ abstract class ICodeCheckers {
           (stringConcatIndent(), this.instruction match {
             case CALL_PRIMITIVE(StringConcat(el)) => "..."
             case null                             => "null"
-            case cm @ CALL_METHOD(_, _)           => if (clasz.symbol == cm.hostClass) cm.toShortString else cm.toString      
+            case cm @ CALL_METHOD(_, _)           => if (clasz.symbol == cm.hostClass) cm.toShortString else cm.toString
             case x                                => x.toString
           })
       }
@@ -705,7 +712,7 @@ abstract class ICodeCheckers {
     //////////////// Error reporting /////////////////////////
 
     def icodeError(msg: String) {
-      ICodeCheckers.this.global.globalError(
+      ICodeCheckers.this.global.warning(
         "!! ICode checker fatality in " + method + 
         "\n  at: " + basicBlock.fullString +
         "\n  error message: " + msg

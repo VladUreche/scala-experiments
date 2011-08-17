@@ -75,7 +75,7 @@ abstract class ICodes extends AnyRef
   }
 
   def dumpMethodAndAbort(m: IMethod, msg: String): Nothing = {
-    Console.println("Fatal bug in inlinerwhile traversing " + m + ": " + msg)
+    println("Fatal bug in inlinerwhile traversing " + m + ": " + msg)
     m.dump()
     global.abort("" + m)
   }

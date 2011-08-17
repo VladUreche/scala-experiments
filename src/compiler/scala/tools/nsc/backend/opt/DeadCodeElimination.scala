@@ -46,21 +46,23 @@ abstract class DeadCodeElimination extends SubComponent {
       cls.methods.foreach { m =>
         this.method = m
         dieCodeDie(m)
-        global.closureElimination.peephole(m)
+        //global.closureElimination.peephole(m)
       }
     }
 
     val rdef = new reachingDefinitions.ReachingDefinitionsAnalysis;
+    val rdefPerInstr: mutable.Map[(BasicBlock, Int), rdef.lattice.Elem] = mutable.Map.empty
 
     /** Use-def chain: give the reaching definitions at the beginning of given instruction. */
     var defs: immutable.Map[(BasicBlock, Int), immutable.Set[rdef.lattice.Definition]] = immutable.HashMap.empty
     
     /** Useful instructions which have not been scanned yet. */
     val worklist: mutable.Set[(BasicBlock, Int)] = new mutable.LinkedHashSet
-    
+    val worklistSource: mutable.Map[(BasicBlock, Int), List[(BasicBlock, Int)]] = mutable.Map.empty
+
     /** what instructions have been marked as useful? */
     val useful: mutable.Map[BasicBlock, mutable.BitSet] = perRunCaches.newMap()
-    
+
     /** what local variables have been accessed at least once? */
     var accessedLocals: List[Local] = Nil
     
@@ -68,7 +70,7 @@ abstract class DeadCodeElimination extends SubComponent {
     var method: IMethod = _
     
     /** Map instructions who have a drop on some control path, to that DROP instruction. */
-    val dropOf: mutable.Map[(BasicBlock, Int), (BasicBlock, Int)] = perRunCaches.newMap()
+    val dropOf: mutable.Map[(BasicBlock, Int), List[(BasicBlock, Int)]] = perRunCaches.newMap()
     
     def dieCodeDie(m: IMethod) {
       if (m.code ne null) {
@@ -79,6 +81,7 @@ abstract class DeadCodeElimination extends SubComponent {
         m.code.blocks ++= linearizer.linearize(m)
         collectRDef(m)
         mark
+        printUseful(m)
         sweep(m)
         accessedLocals = accessedLocals.distinct
         if (m.locals diff accessedLocals nonEmpty) {
@@ -88,12 +91,23 @@ abstract class DeadCodeElimination extends SubComponent {
       }
     }
 
+    def addWorklistSource(added: (BasicBlock, Int), source: (BasicBlock, Int)) = {
+      if (worklistSource contains added)
+        worklistSource(added) = worklistSource(added) ::: List(source)
+      else
+        worklistSource(added) = List(source)
+    }
+
     /** collect reaching definitions and initial useful instructions for this method. */
     def collectRDef(m: IMethod): Unit = if (m.code ne null) {
-      defs = immutable.HashMap.empty; worklist.clear; useful.clear;
+      defs = immutable.HashMap.empty; worklist.clear; useful.clear; worklistSource.clear; rdefPerInstr.clear;
       rdef.init(m);
       rdef.run;
-     
+
+      class InitialSweep(m: IMethod) extends (BasicBlock, Int)(new BasicBlock(-1, m), -1) {
+        override def toString = "(InitialSweep)"
+      }
+
       for (bb <- m.code.blocks.toList) {
         useful(bb) = new mutable.BitSet(bb.size)
         var rd = rdef.in(bb);
@@ -101,28 +115,42 @@ abstract class DeadCodeElimination extends SubComponent {
           i match {
             case LOAD_LOCAL(l) => 
               defs = defs + Pair(((bb, idx)), rd.vars)
-//              Console.println(i + ": " + (bb, idx) + " rd: " + rd + " and having: " + defs)
+              log("collectRDef " + (bb, idx) + " " + i + ": rd: " + rd + " and having: \n" + defs.mkString("          ","\n          ","\n")+"\n")
             case RETURN(_) | JUMP(_) | CJUMP(_, _, _, _) | CZJUMP(_, _, _, _) | STORE_FIELD(_, _) |
                  THROW(_)   | STORE_ARRAY_ITEM(_) | SCOPE_ENTER(_) | SCOPE_EXIT(_) | STORE_THIS(_) |
-                 LOAD_EXCEPTION(_) | SWITCH(_, _) | MONITOR_ENTER() | MONITOR_EXIT() => worklist += ((bb, idx))
-            case CALL_METHOD(m1, _) if isSideEffecting(m1) => worklist += ((bb, idx)); log("marking " + m1)
+                 LOAD_EXCEPTION(_) | SWITCH(_, _) | MONITOR_ENTER() | MONITOR_EXIT() =>
+              worklist += ((bb, idx))
+              addWorklistSource((bb, idx), new InitialSweep(m))
+            case CALL_METHOD(m1, _) if isSideEffecting(m1) =>
+              log("collectRDef " + (bb, idx) + " " + i + ": marking " + m1)
+              worklist += ((bb, idx));
+              addWorklistSource((bb, idx), new InitialSweep(m))
             case CALL_METHOD(m1, SuperCall(_)) => 
+              log("collectRDef " + (bb, idx) + " " + i + ": marking " + m1)
               worklist += ((bb, idx)) // super calls to constructor
+              addWorklistSource((bb, idx), new InitialSweep(m))
             case DROP(_) =>
+              log("collectRDef " + (bb, idx) + " " + i + ": Listing defs:\n")
               val necessary = rdef.findDefs(bb, idx, 1) exists { p =>
                 val (bb1, idx1) = p
                 bb1(idx1) match {
-                  case CALL_METHOD(m1, _) if isSideEffecting(m1) => true
-                  case LOAD_EXCEPTION(_) | DUP(_) | LOAD_MODULE(_) => true
-                  case _ => 
-                    dropOf((bb1, idx1)) = (bb, idx)
-//                    println("DROP is innessential: " + i + " because of: " + bb1(idx1) + " at " + bb1 + ":" + idx1) 
+                  case CALL_METHOD(m1, _) if isSideEffecting(m1) => log("\t" + (bb1, idx1) +": call side-effecting method " + bb1(idx1)); true
+                  case LOAD_EXCEPTION(_) | DUP(_) | LOAD_MODULE(_) => log("\t" + (bb1, idx1) +": others " + bb1(idx1));true
+                  case _ =>
+                    dropOf((bb1, idx1)) = (bb,idx) :: dropOf.getOrElse((bb1, idx1), Nil)
+                    log("\t" + (bb1, idx1) + ": innessential: " + bb1(idx1))
                     false
                 }
               }
-              if (necessary) worklist += ((bb, idx))
+              log(i + ": necessary=" + necessary)
+              if (necessary) {
+                worklist += ((bb, idx))
+                addWorklistSource((bb, idx), new InitialSweep(m))
+              }
             case _ => ()
           }
+          // add reaching defs information
+          rdefPerInstr += (bb, idx) -> rd
           rd = rdef.interpret(bb, idx, rd)
         }
       }
@@ -132,29 +160,34 @@ abstract class DeadCodeElimination extends SubComponent {
      *  dependencies are marked useful too, and added to the worklist.
      */
     def mark() {
-//      log("Starting with worklist: " + worklist)
+      log("Starting with worklist: " + worklist)
       while (!worklist.isEmpty) {
         val (bb, idx) = worklist.iterator.next
         worklist -= ((bb, idx))
-        debuglog("Marking instr: \tBB_" + bb + ": " + idx + " " + bb(idx))
+        log("Marking instr: \tBB_" + bb + ": " + idx + " " + bb(idx))
           
         val instr = bb(idx)
         if (!useful(bb)(idx)) {
           useful(bb) += idx
-          dropOf.get(bb, idx) match {
-            case Some((bb1, idx1)) => useful(bb1) += idx1
-            case None => ()
+          dropOf.get(bb, idx) foreach {
+              for ((bb1, idx1) <- _) {
+                useful(bb1) += idx1
+                addWorklistSource((bb1, idx1), (bb, idx))
+              }
           }
           instr match {
             case LOAD_LOCAL(l1) =>
               for ((l2, bb1, idx1) <- defs((bb, idx)) if l1 == l2; if !useful(bb1)(idx1)) {
-                log("\tAdding " + bb1(idx1))
+                log("\tAdding " + (bb1, idx1) + " " + bb1(idx1))
                 worklist += ((bb1, idx1))
+                addWorklistSource((bb1, idx1), (bb, idx))
               }
                 
             case nw @ NEW(REFERENCE(sym)) =>
               assert(nw.init ne null, "null new.init at: " + bb + ": " + idx + "(" + instr + ")")
-              worklist += findInstruction(bb, nw.init)
+              val instrPair = findInstruction(bb, nw.init)
+              worklist += instrPair
+              addWorklistSource(instrPair, (bb, idx))
               if (inliner.isClosureClass(sym)) {
                 liveClosures += sym
               }
@@ -172,14 +205,30 @@ abstract class DeadCodeElimination extends SubComponent {
               
             case _ =>
               for ((bb1, idx1) <- rdef.findDefs(bb, idx, instr.consumed) if !useful(bb1)(idx1)) {
-                log("\tAdding " + bb1(idx1))
+                log("\tAdding " + (bb1, idx1) + " " + bb1(idx1))
                 worklist += ((bb1, idx1))
+                addWorklistSource((bb1, idx1), (bb, idx))
               }
           }
         }
       }
     }
-    
+
+    def printUseful(m: IMethod) {
+      val worklistSourceDefault = worklistSource.withDefault(d => Nil)
+
+      log("")
+      for (bb <- m.code.blocks.toList) {
+        log("Block: " + bb)
+        for ((i, idx) <- bb.toList.zipWithIndex) {
+          log("\t %-5s: %-40s \t ".format(useful(bb)(idx).toString, i.toString) + " BECAUSE: " + worklistSourceDefault((bb, idx)))
+          if (!useful(bb)(idx))
+            log("\t\t" + rdefPerInstr((bb, idx)).toString)
+        }
+      }
+      log("")
+    }
+
     def sweep(m: IMethod) {
       val compensations = computeCompensations(m)
       

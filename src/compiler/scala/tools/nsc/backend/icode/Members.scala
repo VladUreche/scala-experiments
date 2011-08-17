@@ -175,6 +175,11 @@ trait Members { self: ICodes =>
         l
       }
 
+    def addLocalToBack(l: Local): Local =
+      locals find (_ == l) getOrElse {
+        locals = locals ::: List(l)
+        l
+      }
 
     def addParam(p: Local): Unit =
       if (params contains p) ()

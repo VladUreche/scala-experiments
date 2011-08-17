@@ -4,7 +4,6 @@
 
 package scala.tools.nsc
 package backend.opt
-import scala.collection.immutable
 
 /**
   * This optimization phase inlines the exception handlers so that further phases can optimize the code better
@@ -85,10 +84,9 @@ abstract class InlineExceptionHandlers extends SubComponent {
     /* Used only for warnings */
     var currentClass: IClass = null
 
-
     /** Apply exception handler inlining to a class */
     override def apply(c: IClass): Unit =
-      if (settings.inline.value) { // should we be piggybacking the inliner setting?
+      if (settings.inlineHandlers.value) {
         val startTime = System.currentTimeMillis
         currentClass = c
 
@@ -98,6 +96,9 @@ abstract class InlineExceptionHandlers extends SubComponent {
 
         log("Finished " + c.toString + "... " + (System.currentTimeMillis - startTime) + "ms")
         currentClass = null
+
+        // TODO: Disable this!!!
+        global.icodeChecker.check(c)
       }
 
     /**
@@ -181,53 +182,56 @@ abstract class InlineExceptionHandlers extends SubComponent {
                     } else {
 
                       var newCode: List[Instruction] = Nil
+                      var replaceType = -1
 
                       // Prepare the new code, depending on the local
                       exceptionLocalOpt match {
 
                         // we already know where to load the exception
                         case Some(exceptionLocal) =>
+                          replaceType = 1
                           val exceptionType = typeInfo.stack.pop
 
-                          newCode = STORE_LOCAL(exceptionLocal) :: Nil
+                          newCode ::= STORE_LOCAL(exceptionLocal)
                           while (typeInfo.stack.length != 0)
-                            newCode = DROP(typeInfo.stack.pop) :: newCode
-                          newCode = JUMP(newHandler) :: newCode
+                            newCode ::= DROP(typeInfo.stack.pop)
+                          newCode ::= JUMP(newHandler)
 
                         // we only have the exception on the stack, no need to do anything
                         case None if (typeInfo.stack.length == 1) =>
+                          replaceType = 2
                           newCode = JUMP(newHandler) :: Nil
 
                         // we have the exception on top of the stack, create a local, load exception, clear the stack
                         // and finally store the exception on the stack
                         case None =>
+                          replaceType = 3
                           val exceptionType = typeInfo.stack.pop
 
                           assert(currentClass ne null)
+                          assert(currentClass.cunit ne null)
                           val localName = currentClass.cunit.freshTermName("exception$")
-                          val localSymbol = bblock.method.symbol.newValue(localName)
                           val localType = exceptionType
+                          val localSymbol = bblock.method.symbol.newValue(NoPosition, localName).setInfo(localType.toType)
                           val local = new Local(localSymbol, localType, false)
-                          bblock.method.addLocal(local)
+                          bblock.method.addLocalToBack(local)
 
-                          /* To pass the ICodeCheckers phase this has to be split to a new block since BasicBlock's
-                           * indirectExceptionSuccessors introduce false successors that break the stack discipline
-                           * at the beginning of the exception handler
-                           * TODO: Check what is better: to have this complex code run or to have the exception thrown?
-                           * TODO: Do we really care about ICodeCheckers? Tiark suggests ICodeCheckers might be too
-                           * conservative (exception handler blocks should not have a meet operation between
-                           * predecessors as they drop the stack anyway)
+                          /* The code generated here fails the ICodeCheckers phase!
+                           *
+                           * indirectExceptionSuccessors introduces false successors that break the stack discipline
+                           * at the beginning of the exception handler (the stack size can be the same but the elements
+                           * might not be lub-able: In the following case, the stacks are ConcatClass and REF(class
+                           * Exception) and lub throws an exception.
+                           *
+                           * Crashing example: "abc" + this.synchronized { throw new Exception(result) }
+                           *
+                           * This is definitely a problem in the ICodeCheckers, so it shouldn't be addressed here!
                            */
-                          val bridgeBlock = bblock.code.newBlock
-                          // no exception handlers over bridgeblock, there's no exception that could be thrown
-                          bridgeBlock.emit(STORE_LOCAL(local), instr.pos)
+                          newCode ::= STORE_LOCAL(local)
                           while (typeInfo.stack.length != 0)
-                            bridgeBlock.emit(DROP(typeInfo.stack.pop), instr.pos)
-                          bridgeBlock.emit(LOAD_LOCAL(local), instr.pos)
-                          bridgeBlock.emit(JUMP(newHandler), instr.pos)
-                          bridgeBlock.close
-
-                          newCode = JUMP(bridgeBlock) :: Nil
+                            newCode ::= DROP(typeInfo.stack.pop)
+                          newCode ::= LOAD_LOCAL(local)
+                          newCode ::= JUMP(newHandler)
                       }
                       bblock.replaceInstruction(instr, newCode.reverse)
                       // notify the successors changed for the current block
@@ -235,6 +239,8 @@ abstract class InlineExceptionHandlers extends SubComponent {
                       bblock.touched = true
                       newHandler.touched = true
                       log("   Replaced  " + instr.toString + " in " + bblock.toString + " to new handler")
+                      // TODO: Disable this!!!
+                      println("OPTIMIZED[" + replaceType + "] class " + currentClass.toString + " method " + bblock.method.toString + " block " + bblock.toString + " newhandler " + newHandler.toString)
                     }
 
                   case None =>
