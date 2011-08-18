@@ -1,0 +1,67 @@
+module class TestInlineHandlersNoInline extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  
+  // methods
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)]
+  startBlock: 1
+  blocks: [1,4,5,7,3,2]
+  
+  1: pred: List() succs: List(4, 3) flags: <closed>
+    7	LOAD_MODULE module Predef
+    7	CONSTANT("TestInlineHandlersNoInline")
+    7	CALL_METHOD scala.Predef.println (dynamic)
+    8	SCOPE_ENTER variable result: INT
+    8	JUMP 4
+    
+  4: pred: List(1) succs: List(3, 7, 5, 3) flags: <closed>
+    11	LOAD_MODULE module Random
+    11	CALL_METHOD scala.util.Random.nextInt (dynamic)
+    11	CONSTANT(2)
+    11	CALL_PRIMITIVE(Arithmetic(REM,INT))
+    11	CONSTANT(0)
+    11	CJUMP (INT)EQ ? 5 : 7
+    
+  5: pred: List(4) succs: List(3) flags: <closed>
+    12	NEW REF(class IllegalArgumentException)
+    12	DUP(REF(class IllegalArgumentException))
+    12	CONSTANT("something")
+    12	CALL_METHOD java.lang.IllegalArgumentException.<init> (static-instance)
+    12	THROW(IllegalArgumentException)
+    
+  7: pred: List(4) succs: List(3, 2) flags: <closed>
+    13	JUMP 2
+    
+  3: pred: List(1, 4, 5, 7) succs: List(2) flags: <closed> <exheader>
+    10	LOAD_EXCEPTION(class StackOverflowError)
+    10	DROP REF(class StackOverflowError)
+    16	LOAD_MODULE module Predef
+    16	CONSTANT("Stack overflow")
+    16	CALL_METHOD scala.Predef.println (dynamic)
+    16	JUMP 2
+    
+  2: pred: List(7, 3) succs: List() flags: <closed>
+    19	SCOPE_EXIT variable result: INT
+    19	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    catch (StackOverflowError) in List(4, 5, 7) starting at: 3
+      consisting of blocks: List(3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersNoInline {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    4	THIS(TestInlineHandlersNoInline)
+    4	CALL_METHOD java.lang.Object.<init> (super())
+    4	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

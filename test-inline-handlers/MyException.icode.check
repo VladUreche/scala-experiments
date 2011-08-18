@@ -1,0 +1,230 @@
+class MyException extends <root>#java#lang#RuntimeException, <root>#scala#ScalaObject, <root>#scala#Product, <root>#scala#Serializable {
+  // fields:
+  val message: <root>#java#lang#String
+  
+  // methods
+  def productIterator(): <root>#scala#collection#Iterator {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	THIS(MyException)
+    86	CALL_METHOD scala.Product$class.productIterator (static-class)
+    86	RETURN(REF(trait Iterator))
+    
+  }
+  Exception handlers: 
+    
+  def message(): <root>#java#lang#String {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	THIS(MyException)
+    86	LOAD_FIELD value message
+    86	RETURN(REF(class String))
+    
+  }
+  Exception handlers: 
+    
+  def copy(message: <root>#java#lang#String (REF(class String))): <root>#<empty>#MyException {
+  locals: value message: REF(class String)
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	NEW REF(class MyException)
+    86	DUP(REF(class MyException))
+    86	LOAD_LOCAL(value message: REF(class String))
+    86	CALL_METHOD MyException.<init> (static-instance)
+    86	RETURN(REF(class MyException))
+    
+  }
+  Exception handlers: 
+    
+  def copy$default$1(): <root>#java#lang#String {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	THIS(MyException)
+    86	CALL_METHOD MyException.message (dynamic)
+    86	RETURN(REF(class String))
+    
+  }
+  Exception handlers: 
+    
+  def hashCode(): <root>#scala#Int {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	LOAD_MODULE module class ScalaRunTime
+    86	THIS(MyException)
+    86	CALL_METHOD scala.runtime.ScalaRunTime._hashCode (dynamic)
+    86	RETURN(INT)
+    
+  }
+  Exception handlers: 
+    
+  def equals(x$1: <root>#java#lang#Object (REF(class Object))): <root>#scala#Boolean {
+  locals: value x$1: REF(class Object), value MyException$1: REF(class MyException), variable eqEqTemp$1: REF(class Object)
+  startBlock: 1
+  blocks: [1,5,6,11,12,10,7,8,9,2,3,4]
+  
+  1: pred: List() succs: List(5, 2) flags: <closed>
+    86	THIS(MyException)
+    86	LOAD_LOCAL(value x$1: REF(class Object))
+    86	CJUMP (REF(type AnyRef))EQ ? 2 : 5
+    
+  5: pred: List(1) succs: List(3, 6) flags: <closed>
+    86	LOAD_LOCAL(value x$1: REF(class Object))
+    86	IS_INSTANCE REF(class MyException)
+    86	CZJUMP (BOOL)NE ? 6 : 3
+    
+  6: pred: List(5) succs: List(12, 11) flags: <closed>
+    86	LOAD_LOCAL(value x$1: REF(class Object))
+    86	CHECK_CAST REF(class MyException)
+    86	STORE_LOCAL(value MyException$1: REF(class MyException))
+    86	SCOPE_ENTER value MyException$1: REF(class MyException)
+    86	THIS(MyException)
+    86	CALL_METHOD MyException.message (dynamic)
+    86	LOAD_LOCAL(value MyException$1: REF(class MyException))
+    86	CALL_METHOD MyException.message (dynamic)
+    86	STORE_LOCAL(variable eqEqTemp$1: REF(class Object))
+    86	DUP(REF(class Object))
+    86	CZJUMP (REF(class Object))EQ ? 11 : 12
+    
+  11: pred: List(6) succs: List(8, 10) flags: <closed>
+    86	DROP REF(class Object)
+    86	LOAD_LOCAL(variable eqEqTemp$1: REF(class Object))
+    86	CZJUMP (REF(class Object))EQ ? 10 : 8
+    
+  12: pred: List(6) succs: List(8, 10) flags: <closed>
+    86	LOAD_LOCAL(variable eqEqTemp$1: REF(class Object))
+    86	CALL_METHOD java.lang.Object.equals (dynamic)
+    86	CZJUMP (BOOL)NE ? 10 : 8
+    
+  10: pred: List(11, 12) succs: List(8, 7) flags: <closed>
+    86	LOAD_LOCAL(value MyException$1: REF(class MyException))
+    86	THIS(MyException)
+    86	CALL_METHOD scala.Equals.canEqual (dynamic)
+    86	CZJUMP (BOOL)NE ? 7 : 8
+    
+  7: pred: List(10) succs: List(9) flags: <closed>
+    86	CONSTANT(true)
+    86	JUMP 9
+    
+  8: pred: List(11, 12, 10) succs: List(9) flags: <closed>
+    86	CONSTANT(false)
+    86	JUMP 9
+    
+  9: pred: List(7, 8) succs: List(3, 2) flags: <closed>
+    ?	CZJUMP (BOOL)NE ? 2 : 3
+    
+  2: pred: List(1, 9) succs: List(4) flags: <closed>
+    86	CONSTANT(true)
+    86	JUMP 4
+    
+  3: pred: List(5, 9) succs: List(4) flags: <closed>
+    86	CONSTANT(false)
+    86	JUMP 4
+    
+  4: pred: List(2, 3) succs: List() flags: <closed>
+    86	RETURN(BOOL)
+    
+  }
+  Exception handlers: 
+    
+  def productPrefix(): <root>#java#lang#String {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	CONSTANT("MyException")
+    86	RETURN(REF(class String))
+    
+  }
+  Exception handlers: 
+    
+  def productArity(): <root>#scala#Int {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	CONSTANT(1)
+    86	RETURN(INT)
+    
+  }
+  Exception handlers: 
+    
+  def productElement(x$1: <root>#scala#Int (INT)): <root>#java#lang#Object {
+  locals: value x$1: INT, value temp1: INT
+  startBlock: 1
+  blocks: [1,2,3]
+  
+  1: pred: List() succs: List(3, 2) flags: <closed>
+    86	LOAD_LOCAL(value x$1: INT)
+    86	STORE_LOCAL(value temp1: INT)
+    86	SCOPE_ENTER value temp1: INT
+    86	LOAD_LOCAL(value temp1: INT)
+    86	CONSTANT(0)
+    86	CJUMP (INT)EQ ? 2 : 3
+    
+  2: pred: List(1) succs: List() flags: <closed>
+    86	THIS(MyException)
+    86	CALL_METHOD MyException.message (dynamic)
+    86	RETURN(REF(class Object))
+    
+  3: pred: List(1) succs: List() flags: <closed>
+    86	NEW REF(class IndexOutOfBoundsException)
+    86	DUP(REF(class IndexOutOfBoundsException))
+    86	LOAD_LOCAL(value x$1: INT)
+    86	BOX INT
+    86	CALL_METHOD java.lang.Object.toString (dynamic)
+    86	CALL_METHOD java.lang.IndexOutOfBoundsException.<init> (static-instance)
+    86	THROW(IndexOutOfBoundsException)
+    
+  }
+  Exception handlers: 
+    
+  def canEqual(x$1: <root>#java#lang#Object (REF(class Object))): <root>#scala#Boolean {
+  locals: value x$1: REF(class Object)
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	LOAD_LOCAL(value x$1: REF(class Object))
+    86	IS_INSTANCE REF(class MyException)
+    86	RETURN(BOOL)
+    
+  }
+  Exception handlers: 
+    
+  def <init>(message: <root>#java#lang#String (REF(class String))): <root>#<empty>#MyException {
+  locals: value message: REF(class String)
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	THIS(MyException)
+    86	LOAD_LOCAL(value message: REF(class String))
+    86	STORE_FIELD value message (dynamic)
+    86	THIS(MyException)
+    86	LOAD_LOCAL(value message: REF(class String))
+    86	CALL_METHOD java.lang.RuntimeException.<init> (super())
+    86	THIS(MyException)
+    86	CALL_METHOD scala.Product$class.$init$ (static-class)
+    86	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

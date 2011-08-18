@@ -1,0 +1,97 @@
+module class TestInlineHandlersPreciseness extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  
+  // methods
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)], value exception: REF(class Throwable)
+  startBlock: 1
+  blocks: [1,6,7,8,9,3,4,5,2]
+  
+  1: pred: List() succs: List(6, 5, 4, 3) flags: <closed>
+    268	LOAD_MODULE module Predef
+    268	CONSTANT("TestInlineHandlersCorrectHandler")
+    268	CALL_METHOD scala.Predef.println (dynamic)
+    268	JUMP 6
+    
+  6: pred: List(1) succs: List(5, 4, 3, 8, 7, 5, 4, 3) flags: <closed>
+    272	LOAD_MODULE module Random
+    272	CALL_METHOD scala.util.Random.nextInt (dynamic)
+    272	CONSTANT(2)
+    272	CALL_PRIMITIVE(Arithmetic(REM,INT))
+    272	CONSTANT(0)
+    272	CJUMP (INT)EQ ? 7 : 8
+    
+  7: pred: List(6) succs: List(5, 4, 3, 9, 5, 4, 3) flags: <closed>
+    273	NEW REF(class IllegalArgumentException)
+    273	DUP(REF(class IllegalArgumentException))
+    273	CONSTANT("even")
+    273	CALL_METHOD java.lang.IllegalArgumentException.<init> (static-instance)
+    273	JUMP 9
+    
+  8: pred: List(6) succs: List(5, 4, 3, 9, 5, 4, 3) flags: <closed>
+    275	NEW REF(class StackOverflowError)
+    275	DUP(REF(class StackOverflowError))
+    275	CONSTANT("odd")
+    275	CALL_METHOD java.lang.StackOverflowError.<init> (static-instance)
+    275	JUMP 9
+    
+  9: pred: List(7, 8) succs: List(5, 4, 3) flags: <closed>
+    271	STORE_LOCAL(value exception: REF(class Throwable))
+    271	SCOPE_ENTER value exception: REF(class Throwable)
+    276	LOAD_LOCAL(value exception: REF(class Throwable))
+    276	THROW(Throwable)
+    
+  3: pred: List(1, 6, 7, 8, 9) succs: List(2) flags: <closed> <exheader>
+    270	LOAD_EXCEPTION(class Throwable)
+    270	DROP REF(class Throwable)
+    283	LOAD_MODULE module Predef
+    283	CONSTANT("WROOOONG, not Throwable!")
+    283	CALL_METHOD scala.Predef.println (dynamic)
+    283	JUMP 2
+    
+  4: pred: List(1, 6, 7, 8, 9) succs: List(2) flags: <closed> <exheader>
+    270	LOAD_EXCEPTION(class StackOverflowError)
+    270	DROP REF(class StackOverflowError)
+    281	LOAD_MODULE module Predef
+    281	CONSTANT("Correct, StackOverflowException")
+    281	CALL_METHOD scala.Predef.println (dynamic)
+    281	JUMP 2
+    
+  5: pred: List(1, 6, 7, 8, 9) succs: List(2) flags: <closed> <exheader>
+    270	LOAD_EXCEPTION(class IllegalArgumentException)
+    270	DROP REF(class IllegalArgumentException)
+    279	LOAD_MODULE module Predef
+    279	CONSTANT("Correct, IllegalArgumentException")
+    279	CALL_METHOD scala.Predef.println (dynamic)
+    279	JUMP 2
+    
+  2: pred: List(3, 4, 5) succs: List() flags: <closed>
+    267	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    catch (IllegalArgumentException) in List(6, 7, 8, 9) starting at: 5
+      consisting of blocks: List(5)
+      with finalizer: null
+    catch (StackOverflowError) in List(6, 7, 8, 9) starting at: 4
+      consisting of blocks: List(4)
+      with finalizer: null
+    catch (Throwable) in List(6, 7, 8, 9) starting at: 3
+      consisting of blocks: List(3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersPreciseness {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    265	THIS(TestInlineHandlersPreciseness)
+    265	CALL_METHOD java.lang.Object.<init> (super())
+    265	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

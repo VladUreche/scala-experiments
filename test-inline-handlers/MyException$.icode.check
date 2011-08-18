@@ -1,0 +1,100 @@
+module class MyException extends <root>#scala#runtime#AbstractFunction1, <root>#scala#ScalaObject, <root>#scala#Serializable {
+  // fields:
+  
+  // methods
+  def toString(): <root>#java#lang#String {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	CONSTANT("MyException")
+    86	RETURN(REF(class String))
+    
+  }
+  Exception handlers: 
+    
+  def unapply(x$0: <root>#<empty>#MyException (REF(class MyException))): <root>#scala#Option {
+  locals: value x$0: REF(class MyException)
+  startBlock: 1
+  blocks: [1,2,3,4]
+  
+  1: pred: List() succs: List(3, 2) flags: <closed>
+    86	LOAD_LOCAL(value x$0: REF(class MyException))
+    86	CZJUMP (REF(class Object))EQ ? 2 : 3
+    
+  2: pred: List(1) succs: List(4) flags: <closed>
+    86	LOAD_MODULE module None
+    86	JUMP 4
+    
+  3: pred: List(1) succs: List(4) flags: <closed>
+    86	NEW REF(class Some)
+    86	DUP(REF(class Some))
+    86	LOAD_LOCAL(value x$0: REF(class MyException))
+    86	CALL_METHOD MyException.message (dynamic)
+    86	CALL_METHOD scala.Some.<init> (static-instance)
+    86	JUMP 4
+    
+  4: pred: List(2, 3) succs: List() flags: <closed>
+    86	RETURN(REF(class Option))
+    
+  }
+  Exception handlers: 
+    
+  def apply(message: <root>#java#lang#String (REF(class String))): <root>#<empty>#MyException {
+  locals: value message: REF(class String)
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	NEW REF(class MyException)
+    86	DUP(REF(class MyException))
+    86	LOAD_LOCAL(value message: REF(class String))
+    86	CALL_METHOD MyException.<init> (static-instance)
+    86	RETURN(REF(class MyException))
+    
+  }
+  Exception handlers: 
+    
+  def readResolve(): <root>#java#lang#Object {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	LOAD_MODULE module MyException
+    86	RETURN(REF(class Object))
+    
+  }
+  Exception handlers: 
+    
+  def apply(v1: <root>#java#lang#Object (REF(class Object))): <root>#java#lang#Object {
+  locals: value v1: REF(class Object)
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	THIS(MyException)
+    86	LOAD_LOCAL(value v1: REF(class Object))
+    86	CHECK_CAST REF(class String)
+    86	CALL_METHOD MyException.apply (dynamic)
+    86	RETURN(REF(class Object))
+    
+  }
+  Exception handlers: 
+    
+  def <init>(): object <root>#<empty>#MyException {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    86	THIS(MyException)
+    86	CALL_METHOD scala.runtime.AbstractFunction1.<init> (super())
+    86	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

@@ -1,0 +1,74 @@
+module class TestInlineHandlersSubclassInline extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  
+  // methods
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)]
+  startBlock: 1
+  blocks: [1,4,5,8,7,3,2]
+  
+  1: pred: List() succs: List(4, 3) flags: <closed>
+    47	LOAD_MODULE module Predef
+    47	CONSTANT("TestInlineHandlersSubclassInline")
+    47	CALL_METHOD scala.Predef.println (dynamic)
+    48	SCOPE_ENTER variable result: INT
+    48	JUMP 4
+    
+  4: pred: List(1) succs: List(3, 7, 5, 3) flags: <closed>
+    51	LOAD_MODULE module Random
+    51	CALL_METHOD scala.util.Random.nextInt (dynamic)
+    51	CONSTANT(2)
+    51	CALL_PRIMITIVE(Arithmetic(REM,INT))
+    51	CONSTANT(0)
+    51	CJUMP (INT)EQ ? 5 : 7
+    
+  5: pred: List(4) succs: List(3, 8) flags: <closed>
+    52	NEW REF(class IllegalArgumentException)
+    52	DUP(REF(class IllegalArgumentException))
+    52	CONSTANT("something")
+    52	CALL_METHOD java.lang.IllegalArgumentException.<init> (static-instance)
+    52	DROP REF(class RuntimeException)
+    ?	JUMP 8
+    
+  8: pred: List(5) succs: List(2) flags: <closed>
+    56	LOAD_MODULE module Predef
+    56	CONSTANT("RuntimeException")
+    56	CALL_METHOD scala.Predef.println (dynamic)
+    56	JUMP 2
+    
+  7: pred: List(4) succs: List(3, 2) flags: <closed>
+    53	JUMP 2
+    
+  3: pred: List(1, 4, 5, 7) succs: List(2) flags: <closed> <exheader>
+    50	LOAD_EXCEPTION(class RuntimeException)
+    50	DROP REF(class RuntimeException)
+    56	LOAD_MODULE module Predef
+    56	CONSTANT("RuntimeException")
+    56	CALL_METHOD scala.Predef.println (dynamic)
+    56	JUMP 2
+    
+  2: pred: List(8, 7, 3) succs: List() flags: <closed>
+    59	SCOPE_EXIT variable result: INT
+    59	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    catch (RuntimeException) in List(4, 5, 7) starting at: 3
+      consisting of blocks: List(3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersSubclassInline {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    44	THIS(TestInlineHandlersSubclassInline)
+    44	CALL_METHOD java.lang.Object.<init> (super())
+    44	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

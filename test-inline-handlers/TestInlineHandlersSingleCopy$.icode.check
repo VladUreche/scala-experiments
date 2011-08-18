@@ -1,0 +1,109 @@
+module class TestInlineHandlersSingleCopy extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  
+  // methods
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)], value temp17: REF(class Throwable), value ex$6: REF(class Throwable)
+  startBlock: 1
+  blocks: [1,7,8,10,11,14,13,3,4,2,5]
+  
+  1: pred: List() succs: List(7, 3) flags: <closed>
+    191	LOAD_MODULE module Predef
+    191	CONSTANT("TestInlineHandlersSingleCopy")
+    191	CALL_METHOD scala.Predef.println (dynamic)
+    192	SCOPE_ENTER variable result: INT
+    192	JUMP 7
+    
+  7: pred: List(1) succs: List(3, 10, 8, 3) flags: <closed>
+    196	LOAD_MODULE module Random
+    196	CALL_METHOD scala.util.Random.nextInt (dynamic)
+    196	CONSTANT(2)
+    196	CALL_PRIMITIVE(Arithmetic(REM,INT))
+    196	CONSTANT(0)
+    196	CJUMP (INT)EQ ? 8 : 10
+    
+  8: pred: List(7) succs: List(3, 14) flags: <closed>
+    197	NEW REF(class MyException)
+    197	DUP(REF(class MyException))
+    197	CONSTANT("something")
+    197	CALL_METHOD MyException.<init> (static-instance)
+    ?	STORE_LOCAL(value ex$6: REF(class Throwable))
+    ?	JUMP 14
+    
+  10: pred: List(7) succs: List(3, 13, 11, 3) flags: <closed>
+    199	LOAD_MODULE module Predef
+    199	CONSTANT("A side effect in the middle")
+    199	CALL_METHOD scala.Predef.println (dynamic)
+    202	LOAD_MODULE module Random
+    202	CALL_METHOD scala.util.Random.nextInt (dynamic)
+    202	CONSTANT(3)
+    202	CALL_PRIMITIVE(Arithmetic(REM,INT))
+    202	CONSTANT(2)
+    202	CJUMP (INT)EQ ? 11 : 13
+    
+  11: pred: List(10) succs: List(3, 14) flags: <closed>
+    203	NEW REF(class MyException)
+    203	DUP(REF(class MyException))
+    203	CONSTANT("something else")
+    203	CALL_METHOD MyException.<init> (static-instance)
+    ?	STORE_LOCAL(value ex$6: REF(class Throwable))
+    ?	JUMP 14
+    
+  14: pred: List(8, 11) succs: List(5, 4) flags: <closed>
+    194	LOAD_LOCAL(value ex$6: REF(class Throwable))
+    194	STORE_LOCAL(value temp17: REF(class Throwable))
+    194	SCOPE_ENTER value temp17: REF(class Throwable)
+    194	LOAD_LOCAL(value temp17: REF(class Throwable))
+    194	IS_INSTANCE REF(class MyException)
+    194	CZJUMP (BOOL)NE ? 4 : 5
+    
+  13: pred: List(10) succs: List(3, 2) flags: <closed>
+    204	JUMP 2
+    
+  3: pred: List(1, 7, 8, 10, 11, 13) succs: List(5, 4) flags: <closed> <exheader>
+    194	LOAD_EXCEPTION(class Throwable)
+    ?	DUP(REF(class Throwable))
+    ?	STORE_LOCAL(value ex$6: REF(class Throwable))
+    194	STORE_LOCAL(value temp17: REF(class Throwable))
+    194	SCOPE_ENTER value temp17: REF(class Throwable)
+    194	LOAD_LOCAL(value temp17: REF(class Throwable))
+    194	IS_INSTANCE REF(class MyException)
+    194	CZJUMP (BOOL)NE ? 4 : 5
+    
+  4: pred: List(14, 3) succs: List(2) flags: <closed>
+    207	LOAD_MODULE module Predef
+    194	LOAD_LOCAL(value temp17: REF(class Throwable))
+    194	CHECK_CAST REF(class MyException)
+    190	CALL_METHOD MyException.message (dynamic)
+    207	CALL_METHOD scala.Predef.println (dynamic)
+    207	JUMP 2
+    
+  2: pred: List(13, 4) succs: List() flags: <closed>
+    210	SCOPE_EXIT variable result: INT
+    210	RETURN(UNIT)
+    
+  5: pred: List(14, 3) succs: List() flags: <closed>
+    194	LOAD_LOCAL(value ex$6: REF(class Throwable))
+    194	THROW(Throwable)
+    
+  }
+  Exception handlers: 
+    catch (Throwable) in List(7, 8, 10, 11, 13) starting at: 3
+      consisting of blocks: List(5, 4, 3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersSingleCopy {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    188	THIS(TestInlineHandlersSingleCopy)
+    188	CALL_METHOD java.lang.Object.<init> (super())
+    188	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

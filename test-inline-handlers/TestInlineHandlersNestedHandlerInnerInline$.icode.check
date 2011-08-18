@@ -1,0 +1,101 @@
+module class TestInlineHandlersNestedHandlerInnerInline extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  
+  // methods
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)], value temp5: REF(class Throwable), value ex$2: REF(class Throwable)
+  startBlock: 1
+  blocks: [1,10,11,14,13,6,7,8,3,2]
+  
+  1: pred: List() succs: List(10, 6, 3) flags: <closed>
+    112	LOAD_MODULE module Predef
+    112	CONSTANT("TestInlineHandlersNestedHandlersInnerInline")
+    112	CALL_METHOD scala.Predef.println (dynamic)
+    113	SCOPE_ENTER variable result: INT
+    113	JUMP 10
+    
+  10: pred: List(1) succs: List(6, 3, 13, 11, 6, 3) flags: <closed>
+    117	LOAD_MODULE module Random
+    117	CALL_METHOD scala.util.Random.nextInt (dynamic)
+    117	CONSTANT(2)
+    117	CALL_PRIMITIVE(Arithmetic(REM,INT))
+    117	CONSTANT(0)
+    117	CJUMP (INT)EQ ? 11 : 13
+    
+  11: pred: List(10) succs: List(6, 3, 14, 3) flags: <closed>
+    118	NEW REF(class MyException)
+    118	DUP(REF(class MyException))
+    118	CONSTANT("something")
+    118	CALL_METHOD MyException.<init> (static-instance)
+    ?	STORE_LOCAL(value ex$2: REF(class Throwable))
+    ?	JUMP 14
+    
+  14: pred: List(11) succs: List(3, 8, 7, 3) flags: <closed>
+    116	LOAD_LOCAL(value ex$2: REF(class Throwable))
+    116	STORE_LOCAL(value temp5: REF(class Throwable))
+    116	SCOPE_ENTER value temp5: REF(class Throwable)
+    116	LOAD_LOCAL(value ex$2: REF(class Throwable))
+    116	IS_INSTANCE REF(class MyException)
+    116	CZJUMP (BOOL)NE ? 7 : 8
+    
+  13: pred: List(10) succs: List(6, 3, 2) flags: <closed>
+    119	JUMP 2
+    
+  6: pred: List(1, 10, 11, 13) succs: List(3, 8, 7, 3) flags: <closed> <exheader>
+    116	LOAD_EXCEPTION(class Throwable)
+    ?	DUP(REF(class Throwable))
+    ?	STORE_LOCAL(value ex$2: REF(class Throwable))
+    116	STORE_LOCAL(value temp5: REF(class Throwable))
+    116	SCOPE_ENTER value temp5: REF(class Throwable)
+    116	LOAD_LOCAL(value temp5: REF(class Throwable))
+    116	IS_INSTANCE REF(class MyException)
+    116	CZJUMP (BOOL)NE ? 7 : 8
+    
+  7: pred: List(14, 6) succs: List(3, 2) flags: <closed>
+    121	LOAD_MODULE module Predef
+    116	LOAD_LOCAL(value temp5: REF(class Throwable))
+    116	CHECK_CAST REF(class MyException)
+    111	CALL_METHOD MyException.message (dynamic)
+    121	CALL_METHOD scala.Predef.println (dynamic)
+    121	JUMP 2
+    
+  8: pred: List(14, 6) succs: List(3) flags: <closed>
+    116	LOAD_LOCAL(value ex$2: REF(class Throwable))
+    116	THROW(Throwable)
+    
+  3: pred: List(1, 10, 11, 14, 13, 6, 7, 8) succs: List(2) flags: <closed> <exheader>
+    115	LOAD_EXCEPTION(class IllegalArgumentException)
+    115	DROP REF(class IllegalArgumentException)
+    124	LOAD_MODULE module Predef
+    124	CONSTANT("IllegalArgumentException")
+    124	CALL_METHOD scala.Predef.println (dynamic)
+    124	JUMP 2
+    
+  2: pred: List(13, 7, 3) succs: List() flags: <closed>
+    127	SCOPE_EXIT variable result: INT
+    127	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    catch (Throwable) in List(10, 11, 13) starting at: 6
+      consisting of blocks: List(8, 7, 6)
+      with finalizer: null
+    catch (IllegalArgumentException) in List(6, 7, 8, 10, 11, 13, 14) starting at: 3
+      consisting of blocks: List(3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersNestedHandlerInnerInline {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    109	THIS(TestInlineHandlersNestedHandlerInnerInline)
+    109	CALL_METHOD java.lang.Object.<init> (super())
+    109	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

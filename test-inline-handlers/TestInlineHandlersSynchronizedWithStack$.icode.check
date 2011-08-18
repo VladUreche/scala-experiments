@@ -1,0 +1,61 @@
+module class TestInlineHandlersSynchronizedWithStack extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  
+  // methods
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)], value exception$1: REF(class MyException), variable monitor2: REF(class Object)
+  startBlock: 1
+  blocks: [1,4,5,3]
+  
+  1: pred: List() succs: List(4, 3) flags: <closed>
+    234	LOAD_MODULE module Predef
+    234	CONSTANT("TestInlineHandlersSynchronizedWithStack")
+    234	CALL_METHOD scala.Predef.println (dynamic)
+    235	SCOPE_ENTER variable result: REF(class String)
+    238	CONSTANT("hello")
+    ?	DUP(REF(class Object))
+    ?	STORE_LOCAL(variable monitor2: REF(class Object))
+    238	MONITOR_ENTER
+    238	JUMP 4
+    
+  4: pred: List(1) succs: List(3, 5) flags: <closed>
+    239	NEW REF(class MyException)
+    239	DUP(REF(class MyException))
+    239	CONSTANT("hello")
+    239	CALL_METHOD MyException.<init> (static-instance)
+    ?	STORE_LOCAL(value exception$1: REF(class MyException))
+    ?	LOAD_LOCAL(value exception$1: REF(class MyException))
+    ?	JUMP 5
+    
+  5: pred: List(4) succs: List() flags: <closed>
+    ?	CONSTANT("hello")
+    238	MONITOR_EXIT
+    ?	THROW(Throwable)
+    
+  3: pred: List(1, 4) succs: List() flags: <closed> <exheader>
+    238	LOAD_EXCEPTION(class Throwable)
+    ?	LOAD_LOCAL(variable monitor2: REF(class Object))
+    238	MONITOR_EXIT
+    ?	THROW(Throwable)
+    
+  }
+  Exception handlers: 
+    catch (Throwable) in List(4) starting at: 3
+      consisting of blocks: List(3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersSynchronizedWithStack {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    231	THIS(TestInlineHandlersSynchronizedWithStack)
+    231	CALL_METHOD java.lang.Object.<init> (super())
+    231	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}

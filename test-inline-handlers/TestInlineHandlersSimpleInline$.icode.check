@@ -1,0 +1,74 @@
+module class TestInlineHandlersSimpleInline extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  
+  // methods
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)]
+  startBlock: 1
+  blocks: [1,4,5,8,7,3,2]
+  
+  1: pred: List() succs: List(4, 3) flags: <closed>
+    27	LOAD_MODULE module Predef
+    27	CONSTANT("TestInlineHandlersSimpleInline")
+    27	CALL_METHOD scala.Predef.println (dynamic)
+    28	SCOPE_ENTER variable result: INT
+    28	JUMP 4
+    
+  4: pred: List(1) succs: List(3, 7, 5, 3) flags: <closed>
+    31	LOAD_MODULE module Random
+    31	CALL_METHOD scala.util.Random.nextInt (dynamic)
+    31	CONSTANT(2)
+    31	CALL_PRIMITIVE(Arithmetic(REM,INT))
+    31	CONSTANT(0)
+    31	CJUMP (INT)EQ ? 5 : 7
+    
+  5: pred: List(4) succs: List(3, 8) flags: <closed>
+    32	NEW REF(class IllegalArgumentException)
+    32	DUP(REF(class IllegalArgumentException))
+    32	CONSTANT("something")
+    32	CALL_METHOD java.lang.IllegalArgumentException.<init> (static-instance)
+    32	DROP REF(class IllegalArgumentException)
+    ?	JUMP 8
+    
+  8: pred: List(5) succs: List(2) flags: <closed>
+    36	LOAD_MODULE module Predef
+    36	CONSTANT("IllegalArgumentException")
+    36	CALL_METHOD scala.Predef.println (dynamic)
+    36	JUMP 2
+    
+  7: pred: List(4) succs: List(3, 2) flags: <closed>
+    33	JUMP 2
+    
+  3: pred: List(1, 4, 5, 7) succs: List(2) flags: <closed> <exheader>
+    30	LOAD_EXCEPTION(class IllegalArgumentException)
+    30	DROP REF(class IllegalArgumentException)
+    36	LOAD_MODULE module Predef
+    36	CONSTANT("IllegalArgumentException")
+    36	CALL_METHOD scala.Predef.println (dynamic)
+    36	JUMP 2
+    
+  2: pred: List(8, 7, 3) succs: List() flags: <closed>
+    39	SCOPE_EXIT variable result: INT
+    39	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    catch (IllegalArgumentException) in List(4, 5, 7) starting at: 3
+      consisting of blocks: List(3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersSimpleInline {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    24	THIS(TestInlineHandlersSimpleInline)
+    24	CALL_METHOD java.lang.Object.<init> (super())
+    24	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}
