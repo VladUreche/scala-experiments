@@ -4,6 +4,7 @@
 
 package scala.tools.nsc
 package backend.opt
+import scala.util.control.Breaks._
 
 /**
   * This optimization phase inlines the exception handlers so that further phases can optimize the code better
@@ -144,7 +145,9 @@ abstract class InlineExceptionHandlers extends SubComponent {
           case THROW(clazz) =>
             // Decide if any handler fits this exception
             findExceptionHandler(toTypeKind(clazz.tpe), bblock.exceptionSuccessors) match {
-              case Some(handler) =>
+              case Some((handler, caughtException)) =>
+                var createdException: TypeKind = null
+                var thrownException: TypeKind = null
                 log("   Replacing " + instr.toString + " in " + bblock.toString + " to new handler")
 
                 // Duplicate exception handler
@@ -155,10 +158,13 @@ abstract class InlineExceptionHandlers extends SubComponent {
                     val typeInfo = getTypesAtInstruction(bblock, index)
                     var canReplaceHandler = true
 
+                    createdException = typeInfo.stack.head
+                    thrownException = toTypeKind(clazz.tpe)
+
                     // Another batch of sanity checks
                     if (typeInfo.stack.length < 1)                        canReplaceHandler = false
                     if (index != bblock.length - 1)                       canReplaceHandler = false
-                    //if (!(toTypeKind(clazz.tpe) <:< typeInfo.stack.head)) canReplaceHandler = false
+                    if (!(toTypeKind(clazz.tpe) <:< typeInfo.stack.head)) canReplaceHandler = false
                     /* This subtyping relation seems like a decent assumption. Unfortunately this doesn't always hold,
                      * if the inliner phase is enabled:
                      *
@@ -169,7 +175,10 @@ abstract class InlineExceptionHandlers extends SubComponent {
                      *    CALL_PRIMITIVE(EndConcat)
                      *    CALL_METHOD scala.tools.ant.ScalaTask.buildError (dynamic)
                      *    THROW(Throwable)
-                     *   with stack: [REF(trait Nothing)] just before instruction index 5
+                     *   with stack: [REF(trait Nothing)] just before instruction index 5 as in ScalaTask we have
+                     *   protected def buildError(message: String): Nothing
+                     *
+                     * Still, we need this assumption to *always* hold so we don't generate incorrect code!
                      */
 
                     if (!canReplaceHandler) {
@@ -239,7 +248,11 @@ abstract class InlineExceptionHandlers extends SubComponent {
                       bblock.touched = true
                       newHandler.touched = true
                       log("   Replaced  " + instr.toString + " in " + bblock.toString + " to new handler")
-                      println("OPTIMIZED[" + replaceType + "] class " + currentClass.toString + " method " + bblock.method.toString + " block " + bblock.toString + " newhandler " + newHandler.toString)
+                      // TODO: Disable this!!!
+                      println("OPTIMIZED[" + replaceType + "] class " + currentClass.toString + " method " +
+                        bblock.method.toString + " block " + bblock.toString + " newhandler " +
+                        newHandler.toString + ":\n\t\t" + createdException.toString + " <:< " +
+                        thrownException.toString + "<:<" + caughtException.toString)
                     }
 
                   case None =>
@@ -329,26 +342,59 @@ abstract class InlineExceptionHandlers extends SubComponent {
       * }}}
       *
       * will print "RuntimeException" => we need the *first* valid handler
+      *
+      * There's a hidden catch here: say we have the following code:
+      * {{{
+      * try {
+      *   val exception: Throwable =
+      *     if (scala.util.Random.nextInt % 2 == 0)
+      *       new IllegalArgumentException("even")
+      *     else
+      *       new StackOverflowError("odd")
+      *   throw exception
+      * } catch {
+      *   case e: IllegalArgumentException =>
+      *     println("Correct, IllegalArgumentException")
+      *   case e: StackOverflowError =>
+      *     println("Correct, StackOverflowException")
+      *   case t: Throwable =>
+      *     println("WROOOONG, not Throwable!")
+      * }
+      * }}}
+      *
+      * We don't want to select a handler if there's at least one that's more specific!
       */
-    def findExceptionHandler(exception: TypeKind, handlers: List[BasicBlock]): Option[BasicBlock] = {
+    def findExceptionHandler(thrownException: TypeKind, handlers: List[BasicBlock]): Option[(BasicBlock, TypeKind)] = {
 
-      // function to check if handler matches
-      def handlerMatches(bb: BasicBlock): Boolean =
+      // function to extract exeption type
+      def extractException(bb: BasicBlock): Option[TypeKind] =
         if (bb.length >= 1) {
           bb.head match {
-            case LOAD_EXCEPTION(clazz) if (exception <:< toTypeKind(clazz.tpe)) => true
-            case _ => false
+            case LOAD_EXCEPTION(clazz) => Some(toTypeKind(clazz.tpe))
+            case _ => None
           }
         } else
-          false
-
-      // filter handlers and return the correct format
-      handlers.filter(handlerMatches(_)) match {
-        case handler::rest =>
-          Some(handler)
-        case Nil =>
           None
+
+      var finalHandlerData: Option[(BasicBlock, TypeKind)] = None
+
+      breakable {
+        for (handler <- handlers)
+          extractException(handler) match {
+            case Some(caughtException) if (thrownException <:< caughtException) =>
+              // we'll do inlining here: createdException <:< thrownException <:< caughtException, good!
+              finalHandlerData = Some((handler, caughtException))
+              break
+            case Some(caughtException) if (caughtException <:< thrownException) =>
+              // we can't do inlining here, the handling mechanism is more precise than we can reason about
+              finalHandlerData = None
+              break
+            case _ =>
+              // no result yet, look deeper in the handler stack :)
+          }
       }
+
+      finalHandlerData
     }
 
 
