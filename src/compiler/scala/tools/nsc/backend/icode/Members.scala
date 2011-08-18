@@ -282,6 +282,6 @@ trait Members { self: ICodes =>
       case _        => false
     }
     override def hashCode = sym.hashCode
-    override def toString(): String = sym.toString
+    override def toString(): String = sym.toString + ": " + kind.toString
   }
 }
