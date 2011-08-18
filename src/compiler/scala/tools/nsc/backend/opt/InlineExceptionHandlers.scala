@@ -146,7 +146,7 @@ abstract class InlineExceptionHandlers extends SubComponent {
             // Decide if any handler fits this exception
             findExceptionHandler(toTypeKind(clazz.tpe), bblock.exceptionSuccessors) match {
               case Some((handler, caughtException)) =>
-                var createdException: TypeKind = null
+                var onStackException: TypeKind = null
                 var thrownException: TypeKind = null
                 log("   Replacing " + instr.toString + " in " + bblock.toString + " to new handler")
 
@@ -158,28 +158,14 @@ abstract class InlineExceptionHandlers extends SubComponent {
                     val typeInfo = getTypesAtInstruction(bblock, index)
                     var canReplaceHandler = true
 
-                    createdException = typeInfo.stack.head
+                    onStackException = typeInfo.stack.head
                     thrownException = toTypeKind(clazz.tpe)
 
                     // Another batch of sanity checks
-                    if (typeInfo.stack.length < 1)                        canReplaceHandler = false
-                    if (index != bblock.length - 1)                       canReplaceHandler = false
-                    if (!(toTypeKind(clazz.tpe) <:< typeInfo.stack.head)) canReplaceHandler = false
-                    /* This subtyping relation seems like a decent assumption. Unfortunately this doesn't always hold,
-                     * if the inliner phase is enabled:
-                     *
-                     *   warning: Unable to inline the exception handler inside incorrect block:
-                     *    CALL_PRIMITIVE(StringConcat(REF(class Object)))
-                     *    CONSTANT("; see the documenter error output for details.")
-                     *    CALL_PRIMITIVE(StringConcat(REF(class String)))
-                     *    CALL_PRIMITIVE(EndConcat)
-                     *    CALL_METHOD scala.tools.ant.ScalaTask.buildError (dynamic)
-                     *    THROW(Throwable)
-                     *   with stack: [REF(trait Nothing)] just before instruction index 5 as in ScalaTask we have
-                     *   protected def buildError(message: String): Nothing
-                     *
-                     * Still, we need this assumption to *always* hold so we don't generate incorrect code!
-                     */
+                    if (typeInfo.stack.length < 1)                canReplaceHandler = false
+                    if (index != bblock.length - 1)               canReplaceHandler = false
+                    if (!(onStackException <:< thrownException))  canReplaceHandler = false
+                    // in other words: what's on the stack MUST conform to what's in the THROW(..)!
 
                     if (!canReplaceHandler) {
 
@@ -225,17 +211,7 @@ abstract class InlineExceptionHandlers extends SubComponent {
                           val local = new Local(localSymbol, localType, false)
                           bblock.method.addLocal(local)
 
-                          /* The code generated here fails the ICodeCheckers phase!
-                           *
-                           * indirectExceptionSuccessors introduces false successors that break the stack discipline
-                           * at the beginning of the exception handler (the stack size can be the same but the elements
-                           * might not be lub-able: In the following case, the stacks are ConcatClass and REF(class
-                           * Exception) and lub throws an exception.
-                           *
-                           * Crashing example: "abc" + this.synchronized { throw new Exception(result) }
-                           *
-                           * This is definitely a problem in the ICodeCheckers, so it shouldn't be addressed here!
-                           */
+                          // Save the exception, drop the stack and place back the exception
                           newCode ::= STORE_LOCAL(local)
                           while (typeInfo.stack.length != 0)
                             newCode ::= DROP(typeInfo.stack.pop)
@@ -251,8 +227,8 @@ abstract class InlineExceptionHandlers extends SubComponent {
                       // TODO: Disable this!!!
                       println("OPTIMIZED[" + replaceType + "] class " + currentClass.toString + " method " +
                         bblock.method.toString + " block " + bblock.toString + " newhandler " +
-                        newHandler.toString + ":\n\t\t" + createdException.toString + " <:< " +
-                        thrownException.toString + "<:<" + caughtException.toString)
+                        newHandler.toString + ":\n\t\t" + onStackException.toString + " <:< " +
+                        thrownException.toString + " <:< " + caughtException.toString)
                     }
 
                   case None =>
