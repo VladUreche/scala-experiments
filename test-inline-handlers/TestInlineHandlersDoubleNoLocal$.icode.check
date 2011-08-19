@@ -1,0 +1,152 @@
+module class TestInlineHandlersDoubleNoLocal extends <root>#java#lang#Object, <root>#scala#ScalaObject {
+  // fields:
+  val a1: <root>#java#lang#String
+  val a2: <root>#java#lang#String
+  
+  // methods
+  def a1(): <root>#java#lang#String {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    291	THIS(TestInlineHandlersDoubleNoLocal)
+    291	LOAD_FIELD value a1
+    291	RETURN(REF(class String))
+    
+  }
+  Exception handlers: 
+    
+  def a2(): <root>#java#lang#String {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    292	THIS(TestInlineHandlersDoubleNoLocal)
+    292	LOAD_FIELD value a2
+    292	RETURN(REF(class String))
+    
+  }
+  Exception handlers: 
+    
+  def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
+  locals: value args: ARRAY[REF(class String)], value t: REF(class Throwable), variable monitor3: REF(class Object), variable monitor4: REF(class Object)
+  startBlock: 1
+  blocks: [1,4,7,10,12,9,13,6,11,3,2]
+  
+  1: pred: List() succs: List(4, 3) flags: <closed>
+    295	LOAD_MODULE module Predef
+    295	CONSTANT("TestInlineHandlersDoubleNoLocal")
+    295	CALL_METHOD scala.Predef.println (dynamic)
+    295	JUMP 4
+    
+  4: pred: List(1) succs: List(3, 7, 6, 3) flags: <closed>
+    298	THIS(TestInlineHandlersDoubleNoLocal)
+    298	CALL_METHOD TestInlineHandlersDoubleNoLocal.a1 (dynamic)
+    ?	DUP(REF(class Object))
+    ?	STORE_LOCAL(variable monitor3: REF(class Object))
+    298	MONITOR_ENTER
+    298	JUMP 7
+    
+  7: pred: List(4) succs: List(6, 3, 10, 9, 6, 3) flags: <closed>
+    299	THIS(TestInlineHandlersDoubleNoLocal)
+    299	CALL_METHOD TestInlineHandlersDoubleNoLocal.a2 (dynamic)
+    ?	DUP(REF(class Object))
+    ?	STORE_LOCAL(variable monitor4: REF(class Object))
+    299	MONITOR_ENTER
+    299	JUMP 10
+    
+  10: pred: List(7) succs: List(9, 6, 3, 12, 6, 3) flags: <closed>
+    300	NEW REF(class MyException)
+    300	DUP(REF(class MyException))
+    300	CONSTANT("crash")
+    300	CALL_METHOD MyException.<init> (static-instance)
+    ?	JUMP 12
+    
+  12: pred: List(10) succs: List(6, 3, 13, 3) flags: <closed>
+    ?	LOAD_LOCAL(variable monitor4: REF(class Object))
+    299	MONITOR_EXIT
+    ?	JUMP 13
+    
+  9: pred: List(7, 10) succs: List(6, 3, 13, 3) flags: <closed> <exheader>
+    299	LOAD_EXCEPTION(class Throwable)
+    ?	LOAD_LOCAL(variable monitor4: REF(class Object))
+    299	MONITOR_EXIT
+    ?	JUMP 13
+    
+  13: pred: List(12, 9) succs: List(3, 11) flags: <closed>
+    ?	LOAD_LOCAL(variable monitor3: REF(class Object))
+    298	MONITOR_EXIT
+    ?	STORE_LOCAL(value t: REF(class Throwable))
+    ?	JUMP 11
+    
+  6: pred: List(4, 7, 10, 12, 9) succs: List(3, 11) flags: <closed> <exheader>
+    298	LOAD_EXCEPTION(class Throwable)
+    ?	LOAD_LOCAL(variable monitor3: REF(class Object))
+    298	MONITOR_EXIT
+    ?	STORE_LOCAL(value t: REF(class Throwable))
+    ?	JUMP 11
+    
+  11: pred: List(13, 6) succs: List(2) flags: <closed>
+    304	LOAD_MODULE module Predef
+    304	CALL_PRIMITIVE(StartConcat)
+    304	CONSTANT("Caught crash: ")
+    304	CALL_PRIMITIVE(StringConcat(REF(class String)))
+    304	LOAD_LOCAL(value t: REF(class Throwable))
+    304	CALL_METHOD java.lang.Throwable.toString (dynamic)
+    304	CALL_PRIMITIVE(StringConcat(REF(class String)))
+    304	CALL_PRIMITIVE(EndConcat)
+    304	CALL_METHOD scala.Predef.println (dynamic)
+    304	JUMP 2
+    
+  3: pred: List(1, 4, 7, 10, 12, 9, 13, 6) succs: List(2) flags: <closed> <exheader>
+    297	LOAD_EXCEPTION(class Throwable)
+    304	STORE_LOCAL(value t: REF(class Throwable))
+    304	LOAD_MODULE module Predef
+    304	CALL_PRIMITIVE(StartConcat)
+    304	CONSTANT("Caught crash: ")
+    304	CALL_PRIMITIVE(StringConcat(REF(class String)))
+    304	LOAD_LOCAL(value t: REF(class Throwable))
+    304	CALL_METHOD java.lang.Throwable.toString (dynamic)
+    304	CALL_PRIMITIVE(StringConcat(REF(class String)))
+    304	CALL_PRIMITIVE(EndConcat)
+    304	CALL_METHOD scala.Predef.println (dynamic)
+    304	JUMP 2
+    
+  2: pred: List(11, 3) succs: List() flags: <closed>
+    294	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    catch (Throwable) in List(10) starting at: 9
+      consisting of blocks: List(9)
+      with finalizer: null
+    catch (Throwable) in List(7, 8, 9, 10, 12) starting at: 6
+      consisting of blocks: List(6)
+      with finalizer: null
+    catch (Throwable) in List(4, 6, 7, 8, 9, 10, 12, 13) starting at: 3
+      consisting of blocks: List(3)
+      with finalizer: null
+    
+  def <init>(): object <root>#<empty>#TestInlineHandlersDoubleNoLocal {
+  locals: 
+  startBlock: 1
+  blocks: [1]
+  
+  1: pred: List() succs: List() flags: <closed>
+    289	THIS(TestInlineHandlersDoubleNoLocal)
+    289	CALL_METHOD java.lang.Object.<init> (super())
+    291	THIS(TestInlineHandlersDoubleNoLocal)
+    291	CONSTANT("a")
+    291	STORE_FIELD value a1 (dynamic)
+    292	THIS(TestInlineHandlersDoubleNoLocal)
+    292	CONSTANT("b")
+    292	STORE_FIELD value a2 (dynamic)
+    292	RETURN(UNIT)
+    
+  }
+  Exception handlers: 
+    
+  
+}
