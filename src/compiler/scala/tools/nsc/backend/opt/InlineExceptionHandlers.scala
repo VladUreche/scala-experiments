@@ -72,6 +72,7 @@ abstract class InlineExceptionHandlers extends SubComponent {
      *   => Option[Local]
      */
     var handlerCopies: Map[BasicBlock, Option[(Option[Local], BasicBlock)]] = Map.empty
+    /* This map is the inverse of handlerCopies, used to compute the stack of duplicate blocks */
     var handlerCopiesInverted: Map[BasicBlock, (BasicBlock, TypeKind)] = Map.empty
 
     /* Type Flow Analysis */
@@ -97,9 +98,6 @@ abstract class InlineExceptionHandlers extends SubComponent {
 
         log("Finished " + c.toString + "... " + (System.currentTimeMillis - startTime) + "ms")
         currentClass = null
-
-        // The iCodeCheker should only be enabled for debugging
-        //global.icodeChecker.check(c)
       }
 
     /**
@@ -138,114 +136,133 @@ abstract class InlineExceptionHandlers extends SubComponent {
 
     /** Apply exception handler inlining to a basic block  */
     def apply(bblock: BasicBlock): Unit = {
-      var index = 0
+      /*
+       * The logic of this entire method:
+       *  - for each basic block, we look at each instruction until we find a THROW instruction
+       *  - once we found a THROW instruction, we decide if it is DECIDABLE which of handler will catch the exception
+       *  (see method findExceptionHandler for more details)
+       *  - if we decided there is a handler that will catch the exception, we need to replace the THROW instruction by
+       *  a set of equivalent instructions:
+       *    * we need to compute the static types of the stack slots
+       *    * we need to clear the stack, everything but the exception instance on top (or in a local variable slot)
+       *    * we need to JUMP to the duplicate exception handler
+       *  - we compute the static types of the stack slots in function getTypesAtInstruction
+       *  - we duplicate the exception handler (and we get back the information of whether the duplicate expects the
+       *  exception instance on top of the stack or in a local variable slot)
+       *  - we compute the necessary code to put the exception in its place, clear the stack and JUMP
+       *  - we change the THROW exception to the new Clear stack + JUMP code
+       */
+      for ((instr, index) <- bblock.zipWithIndex)
+        if (instr.isInstanceOf[THROW]) {
 
-      for (instr <- bblock) {
-        instr match {
-          case THROW(clazz) =>
-            // Decide if any handler fits this exception
-            findExceptionHandler(toTypeKind(clazz.tpe), bblock.exceptionSuccessors) match {
-              case Some((handler, caughtException)) =>
-                var onStackException: TypeKind = null
-                var thrownException: TypeKind = null
-                log("   Replacing " + instr.toString + " in " + bblock.toString + " to new handler")
+          // Decide if any handler fits this exception
+          val THROW(clazz) = instr
+          findExceptionHandler(toTypeKind(clazz.tpe), bblock.exceptionSuccessors) match {
 
-                // Solve the stack and drop the element that we already stored, which should be the exception
-                // needs to be done here to be the first thing before code becomes altered
-                var typeInfo = getTypesAtInstruction(bblock, index)
+            case None =>
+              // nothing to do, we cannot determine statically which handler will catch the exception
 
-                // Duplicate exception handler
-                duplicateExceptionHandlerWithCaching(handler) match {
+            case Some((handler, caughtException)) =>
+              var onStackException: TypeKind = null
+              var thrownException: TypeKind = null
+              log("   Replacing " + instr.toString + " in " + bblock.toString + " to new handler")
 
-                  case Some((exceptionLocalOpt, newHandler)) =>
-                    var canReplaceHandler = true
+              // Solve the stack and drop the element that we already stored, which should be the exception
+              // needs to be done here to be the first thing before code becomes altered
+              var typeInfo = getTypesAtInstruction(bblock, index)
 
-                    onStackException = typeInfo.head
-                    thrownException = toTypeKind(clazz.tpe)
+              // Duplicate exception handler
+              duplicateExceptionHandlerWithCaching(handler) match {
 
-                    // Another batch of sanity checks
-                    if (typeInfo.length < 1)                      canReplaceHandler = false
-                    if (index != bblock.length - 1)               canReplaceHandler = false
-                    if (!(onStackException <:< thrownException))  canReplaceHandler = false
-                    // in other words: what's on the stack MUST conform to what's in the THROW(..)!
+                case None =>
+                  log("   Could not duplicate handler for " + instr.toString + " in " + bblock.toString)
 
-                    if (!canReplaceHandler) {
+                case Some((exceptionLocalOpt, newHandler)) =>
 
-                      assert(currentClass ne null)
-                      currentClass.cunit.warning(NoPosition, "Unable to inline the exception handler inside incorrect" +
-                        " block:\n" + bblock.mkString("\n") + "\nwith stack: " + typeInfo.toString + " just " +
-                        "before instruction index " + index)
+                  var canReplaceHandler = true
+                  onStackException = typeInfo.head
+                  thrownException = toTypeKind(clazz.tpe)
 
-                    } else {
+                  // A couple of sanity checks, to make sure we don't touch code we can't safely handle
+                  if (typeInfo.length < 1)                      canReplaceHandler = false
+                  if (index != bblock.length - 1)               canReplaceHandler = false
+                  if (!(onStackException <:< thrownException))  canReplaceHandler = false
+                  // in other words: what's on the stack MUST conform to what's in the THROW(..)!
 
-                      var newCode: List[Instruction] = Nil
-                      var replaceType = -1
+                  if (!canReplaceHandler) {
 
-                      // Prepare the new code, depending on the local
-                      exceptionLocalOpt match {
+                    assert(currentClass ne null)
+                    currentClass.cunit.warning(NoPosition, "Unable to inline the exception handler inside incorrect" +
+                      " block:\n" + bblock.mkString("\n") + "\nwith stack: " + typeInfo.toString + " just " +
+                      "before instruction index " + index)
 
-                        // we already know where to load the exception
-                        case Some(exceptionLocal) =>
-                          replaceType = 1
-                          val exceptionType = typeInfo.head
+                  } else {
 
-                          newCode ::= STORE_LOCAL(exceptionLocal)
-                          while (typeInfo.length > 1) {
-                            typeInfo = typeInfo.tail // in the first cycle we remove the exception Type
-                            newCode ::= DROP(typeInfo.head)
-                          }
-                          newCode ::= JUMP(newHandler)
+                    var newCode: List[Instruction] = Nil
+                    var replaceType = -1
 
-                        // we only have the exception on the stack, no need to do anything
-                        case None if (typeInfo.length == 1) =>
-                          replaceType = 2
-                          newCode = JUMP(newHandler) :: Nil
+                    // Prepare the new code to replace the THROW instruction
+                    exceptionLocalOpt match {
 
-                        // we have the exception on top of the stack, create a local, load exception, clear the stack
-                        // and finally store the exception on the stack
-                        case None =>
-                          replaceType = 3
-                          val exceptionType = typeInfo.head
+                      // the handler duplicate expects the exception in a local: easy one :)
+                      case Some(exceptionLocal) =>
+                        replaceType = 1
+                        val exceptionType = typeInfo.head
 
-                          assert(currentClass ne null)
-                          assert(currentClass.cunit ne null)
-                          val localName = currentClass.cunit.freshTermName("exception$")
-                          val localType = exceptionType
-                          val localSymbol = bblock.method.symbol.newValue(NoPosition, localName).setInfo(localType.toType)
-                          val local = new Local(localSymbol, localType, false)
-                          bblock.method.addLocal(local)
+                        newCode ::= STORE_LOCAL(exceptionLocal)
+                        while (typeInfo.length > 1) {
+                          typeInfo = typeInfo.tail // in the first cycle we remove the exception Type
+                          newCode ::= DROP(typeInfo.head)
+                        }
+                        newCode ::= JUMP(newHandler)
 
-                          // Save the exception, drop the stack and place back the exception
-                          newCode ::= STORE_LOCAL(local)
-                          while (typeInfo.length > 1) {
-                            typeInfo = typeInfo.tail // in the first cycle we remove the exception Type
-                            newCode ::= DROP(typeInfo.head)
-                          }
-                          newCode ::= LOAD_LOCAL(local)
-                          newCode ::= JUMP(newHandler)
-                      }
-                      bblock.replaceInstruction(instr, newCode.reverse)
-                      // notify the successors changed for the current block
-                      // notify the predecessors changed for the inlined handler block
-                      bblock.touched = true
-                      newHandler.touched = true
-                      log("   Replaced  " + instr.toString + " in " + bblock.toString + " to new handler")
-                      // TODO: Disable this!!!
-                      println("OPTIMIZED[" + replaceType + "] class " + currentClass.toString + " method " +
-                        bblock.method.toString + " block " + bblock.toString + " newhandler " +
-                        newHandler.toString + ":\n\t\t" + onStackException.toString + " <:< " +
-                        thrownException.toString + " <:< " + caughtException.toString)
+                      // we already have the exception on top of the stack, only need to JUMP
+                      case None if (typeInfo.length == 1) =>
+                        replaceType = 2
+                        newCode = JUMP(newHandler) :: Nil
+
+                      // we have the exception on top of the stack but we have other stuff on the stack
+                      // create a local, load exception, clear the stack and finally store the exception on the stack
+                      case None =>
+                        replaceType = 3
+                        val exceptionType = typeInfo.head
+
+                        assert(currentClass ne null)
+                        assert(currentClass.cunit ne null)
+
+                        // Here we could create a single local for all exceptions of a certain type. TODO: try that.
+                        val localName = currentClass.cunit.freshTermName("exception$")
+                        val localType = exceptionType
+                        val localSymbol = bblock.method.symbol.newValue(NoPosition, localName).setInfo(localType.toType)
+                        val local = new Local(localSymbol, localType, false)
+                        bblock.method.addLocal(local)
+
+                        // Save the exception, drop the stack and place back the exception
+                        newCode ::= STORE_LOCAL(local)
+                        while (typeInfo.length > 1) {
+                          typeInfo = typeInfo.tail // in the first cycle we remove the exception Type
+                          newCode ::= DROP(typeInfo.head)
+                        }
+                        newCode ::= LOAD_LOCAL(local)
+                        newCode ::= JUMP(newHandler)
                     }
+                    // replace THROW by the new code
+                    bblock.replaceInstruction(instr, newCode.reverse)
 
-                  case None =>
-                    log("   Could not duplicate handler for " + instr.toString + " in " + bblock.toString)
-                }
-              case None =>
-                // nothing to do, the throw will be caught outside the current method
-            }
-          case _ =>
-        }
-        index += 1
+                    // notify the successors changed for the current block
+                    // notify the predecessors changed for the inlined handler block
+                    bblock.touched = true
+                    newHandler.touched = true
+
+                    log("   Replaced  " + instr.toString + " in " + bblock.toString + " to new handler")
+                    log("OPTIMIZED[" + replaceType + "] class " + currentClass.toString + " method " +
+                      bblock.method.toString + " block " + bblock.toString + " newhandler " +
+                      newHandler.toString + ":\n\t\t" + onStackException.toString + " <:< " +
+                      thrownException.toString + " <:< " + caughtException.toString)
+                  }
+
+              }
+          }
       }
     }
 
@@ -275,8 +292,9 @@ abstract class InlineExceptionHandlers extends SubComponent {
 
 
     /**
-      * Gets the stack at the block entry. Normally the typeFlowAnalysis should be run again, but we know the stack
-      * is always empty for duplicate handlers :)
+      * Gets the stack at the block entry. Normally the typeFlowAnalysis should be run again, but we know how to compute
+      * the stack for handler duplicates. For the locals, it's safe to assume the info from the original handler is
+      * still valid (a more precise analysis can be done, but it's not necessary)
       */
     def getTypesAtBlockEntry(bblock: BasicBlock): tfa.lattice.Elem = {
 
