@@ -33,7 +33,7 @@ module class TestInlineHandlersDoubleNoLocal extends <root>#java#lang#Object, <r
   def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
   locals: value args: ARRAY[REF(class String)], value t: REF(class Throwable), variable monitor3: REF(class Object), variable monitor4: REF(class Object)
   startBlock: 1
-  blocks: [1,4,7,10,12,9,13,6,11,3,2]
+  blocks: [1,4,7,10,11,9,12,6,13,3,2]
   
   1: pred: List() succs: List(4, 3) flags: <closed>
     295	LOAD_MODULE module Predef
@@ -57,38 +57,38 @@ module class TestInlineHandlersDoubleNoLocal extends <root>#java#lang#Object, <r
     299	MONITOR_ENTER
     299	JUMP 10
     
-  10: pred: List(7) succs: List(9, 6, 3, 12, 6, 3) flags: <closed>
+  10: pred: List(7) succs: List(9, 6, 3, 11, 6, 3) flags: <closed>
     300	NEW REF(class MyException)
     300	DUP(REF(class MyException))
     300	CONSTANT("crash")
     300	CALL_METHOD MyException.<init> (static-instance)
-    ?	JUMP 12
+    ?	JUMP 11
     
-  12: pred: List(10) succs: List(6, 3, 13, 3) flags: <closed>
+  11: pred: List(10) succs: List(6, 3, 12, 3) flags: <closed>
     ?	LOAD_LOCAL(variable monitor4: REF(class Object))
     299	MONITOR_EXIT
-    ?	JUMP 13
+    ?	JUMP 12
     
-  9: pred: List(7, 10) succs: List(6, 3, 13, 3) flags: <closed> <exheader>
+  9: pred: List(7, 10) succs: List(6, 3, 12, 3) flags: <closed> <exheader>
     299	LOAD_EXCEPTION(class Throwable)
     ?	LOAD_LOCAL(variable monitor4: REF(class Object))
     299	MONITOR_EXIT
-    ?	JUMP 13
+    ?	JUMP 12
     
-  13: pred: List(12, 9) succs: List(3, 11) flags: <closed>
+  12: pred: List(11, 9) succs: List(3, 13) flags: <closed>
     ?	LOAD_LOCAL(variable monitor3: REF(class Object))
     298	MONITOR_EXIT
     ?	STORE_LOCAL(value t: REF(class Throwable))
-    ?	JUMP 11
+    ?	JUMP 13
     
-  6: pred: List(4, 7, 10, 12, 9) succs: List(3, 11) flags: <closed> <exheader>
+  6: pred: List(4, 7, 10, 11, 9) succs: List(3, 13) flags: <closed> <exheader>
     298	LOAD_EXCEPTION(class Throwable)
     ?	LOAD_LOCAL(variable monitor3: REF(class Object))
     298	MONITOR_EXIT
     ?	STORE_LOCAL(value t: REF(class Throwable))
-    ?	JUMP 11
+    ?	JUMP 13
     
-  11: pred: List(13, 6) succs: List(2) flags: <closed>
+  13: pred: List(12, 6) succs: List(2) flags: <closed>
     304	LOAD_MODULE module Predef
     304	CALL_PRIMITIVE(StartConcat)
     304	CONSTANT("Caught crash: ")
@@ -100,7 +100,7 @@ module class TestInlineHandlersDoubleNoLocal extends <root>#java#lang#Object, <r
     304	CALL_METHOD scala.Predef.println (dynamic)
     304	JUMP 2
     
-  3: pred: List(1, 4, 7, 10, 12, 9, 13, 6) succs: List(2) flags: <closed> <exheader>
+  3: pred: List(1, 4, 7, 10, 11, 9, 12, 6) succs: List(2) flags: <closed> <exheader>
     297	LOAD_EXCEPTION(class Throwable)
     304	STORE_LOCAL(value t: REF(class Throwable))
     304	LOAD_MODULE module Predef
@@ -114,7 +114,7 @@ module class TestInlineHandlersDoubleNoLocal extends <root>#java#lang#Object, <r
     304	CALL_METHOD scala.Predef.println (dynamic)
     304	JUMP 2
     
-  2: pred: List(11, 3) succs: List() flags: <closed>
+  2: pred: List(13, 3) succs: List() flags: <closed>
     294	RETURN(UNIT)
     
   }
@@ -122,10 +122,10 @@ module class TestInlineHandlersDoubleNoLocal extends <root>#java#lang#Object, <r
     catch (Throwable) in List(10) starting at: 9
       consisting of blocks: List(9)
       with finalizer: null
-    catch (Throwable) in List(7, 8, 9, 10, 12) starting at: 6
+    catch (Throwable) in List(7, 8, 9, 10, 11) starting at: 6
       consisting of blocks: List(6)
       with finalizer: null
-    catch (Throwable) in List(4, 6, 7, 8, 9, 10, 12, 13) starting at: 3
+    catch (Throwable) in List(4, 6, 7, 8, 9, 10, 11, 12) starting at: 3
       consisting of blocks: List(3)
       with finalizer: null
     

@@ -5,7 +5,7 @@ module class TestInlineHandlersFinallyInline extends <root>#java#lang#Object, <r
   def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
   locals: value args: ARRAY[REF(class String)], value e: REF(class Exception), variable exc1: REF(class Throwable)
   startBlock: 1
-  blocks: [1,6,7,12,9,10,2,4,11,3]
+  blocks: [1,6,7,11,9,10,2,4,12,3]
   
   1: pred: List() succs: List(6, 4, 3) flags: <closed>
     67	LOAD_MODULE module Predef
@@ -22,18 +22,18 @@ module class TestInlineHandlersFinallyInline extends <root>#java#lang#Object, <r
     71	CONSTANT(0)
     71	CJUMP (INT)EQ ? 7 : 9
     
-  7: pred: List(6) succs: List(4, 3, 12, 3) flags: <closed>
+  7: pred: List(6) succs: List(4, 3, 11, 3) flags: <closed>
     72	NEW REF(class IllegalArgumentException)
     72	DUP(REF(class IllegalArgumentException))
     72	CONSTANT("something")
     72	CALL_METHOD java.lang.IllegalArgumentException.<init> (static-instance)
     ?	STORE_LOCAL(value e: REF(class Exception))
-    ?	JUMP 12
+    ?	JUMP 11
     
-  12: pred: List(7) succs: List(3, 11) flags: <closed>
+  11: pred: List(7) succs: List(3, 12) flags: <closed>
     75	LOAD_LOCAL(value e: REF(class Exception))
     ?	STORE_LOCAL(variable exc1: REF(class Throwable))
-    ?	JUMP 11
+    ?	JUMP 12
     
   9: pred: List(6) succs: List(4, 3, 10) flags: <closed>
     73	JUMP 10
@@ -48,19 +48,19 @@ module class TestInlineHandlersFinallyInline extends <root>#java#lang#Object, <r
     81	SCOPE_EXIT variable result: INT
     81	RETURN(UNIT)
     
-  4: pred: List(1, 6, 7, 9) succs: List(3, 11) flags: <closed> <exheader>
+  4: pred: List(1, 6, 7, 9) succs: List(3, 12) flags: <closed> <exheader>
     70	LOAD_EXCEPTION(class Exception)
     ?	STORE_LOCAL(variable exc1: REF(class Throwable))
-    ?	JUMP 11
+    ?	JUMP 12
     
-  11: pred: List(12, 4) succs: List() flags: <closed>
+  12: pred: List(11, 4) succs: List() flags: <closed>
     77	LOAD_MODULE module Predef
     77	CONSTANT("finally")
     77	CALL_METHOD scala.Predef.println (dynamic)
     78	LOAD_LOCAL(variable exc1: REF(class Throwable))
     78	THROW(Throwable)
     
-  3: pred: List(1, 6, 7, 12, 9, 4) succs: List() flags: <closed> <exheader>
+  3: pred: List(1, 6, 7, 11, 9, 4) succs: List() flags: <closed> <exheader>
     76	LOAD_EXCEPTION(class Throwable)
     76	STORE_LOCAL(variable exc1: REF(class Throwable))
     77	LOAD_MODULE module Predef
@@ -74,7 +74,7 @@ module class TestInlineHandlersFinallyInline extends <root>#java#lang#Object, <r
     catch (Exception) in List(6, 7, 9) starting at: 4
       consisting of blocks: List(4)
       with finalizer: null
-    catch (<none>) in List(4, 6, 7, 9, 12) starting at: 3
+    catch (<none>) in List(4, 6, 7, 9, 11) starting at: 3
       consisting of blocks: List(3)
       with finalizer: null
     

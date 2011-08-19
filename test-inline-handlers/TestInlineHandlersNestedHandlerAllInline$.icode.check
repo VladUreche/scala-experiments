@@ -5,7 +5,7 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
   def main(args: <root>#scala#Array[<root>#java#lang#String] (ARRAY[REF(class String)])): <root>#scala#Unit {
   locals: value args: ARRAY[REF(class String)], value temp11: REF(class Throwable), value temp12: REF(class MyException), value temp13: REF(class String), value message: REF(class String), value ex$4: REF(class Throwable), value temp14: REF(class Throwable), value temp15: REF(class MyException), value temp16: REF(class String), value message: REF(class String), value ex$5: REF(class Throwable), variable exc2: REF(class Throwable)
   startBlock: 1
-  blocks: [1,15,16,22,18,19,2,11,12,13,21,4,5,6,20,3]
+  blocks: [1,15,16,20,18,19,2,11,12,13,21,4,5,6,22,3]
   
   1: pred: List() succs: List(15, 11, 4, 3) flags: <closed>
     160	LOAD_MODULE module Predef
@@ -22,15 +22,15 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
     165	CONSTANT(0)
     165	CJUMP (INT)EQ ? 16 : 18
     
-  16: pred: List(15) succs: List(11, 4, 3, 22, 4, 3) flags: <closed>
+  16: pred: List(15) succs: List(11, 4, 3, 20, 4, 3) flags: <closed>
     166	NEW REF(class MyException)
     166	DUP(REF(class MyException))
     166	CONSTANT("something")
     166	CALL_METHOD MyException.<init> (static-instance)
     ?	STORE_LOCAL(value ex$4: REF(class Throwable))
-    ?	JUMP 22
+    ?	JUMP 20
     
-  22: pred: List(16) succs: List(4, 3, 13, 12, 4, 3) flags: <closed>
+  20: pred: List(16) succs: List(4, 3, 13, 12, 4, 3) flags: <closed>
     164	LOAD_LOCAL(value ex$4: REF(class Throwable))
     164	STORE_LOCAL(value temp11: REF(class Throwable))
     164	SCOPE_ENTER value temp11: REF(class Throwable)
@@ -61,7 +61,7 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
     164	IS_INSTANCE REF(class MyException)
     164	CZJUMP (BOOL)NE ? 12 : 13
     
-  12: pred: List(22, 11) succs: List(4, 3, 21, 3) flags: <closed>
+  12: pred: List(20, 11) succs: List(4, 3, 21, 3) flags: <closed>
     164	LOAD_LOCAL(value temp11: REF(class Throwable))
     164	CHECK_CAST REF(class MyException)
     159	STORE_LOCAL(value temp12: REF(class MyException))
@@ -83,7 +83,7 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
     ?	STORE_LOCAL(value ex$5: REF(class Throwable))
     ?	JUMP 21
     
-  13: pred: List(22, 11) succs: List(4, 3, 21, 3) flags: <closed>
+  13: pred: List(20, 11) succs: List(4, 3, 21, 3) flags: <closed>
     164	LOAD_LOCAL(value ex$4: REF(class Throwable))
     ?	STORE_LOCAL(value ex$5: REF(class Throwable))
     ?	JUMP 21
@@ -96,7 +96,7 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
     163	IS_INSTANCE REF(class MyException)
     163	CZJUMP (BOOL)NE ? 5 : 6
     
-  4: pred: List(1, 15, 16, 22, 18, 11, 12, 13) succs: List(3, 6, 5, 3) flags: <closed> <exheader>
+  4: pred: List(1, 15, 16, 20, 18, 11, 12, 13) succs: List(3, 6, 5, 3) flags: <closed> <exheader>
     163	LOAD_EXCEPTION(class Throwable)
     ?	DUP(REF(class Throwable))
     ?	STORE_LOCAL(value ex$5: REF(class Throwable))
@@ -106,7 +106,7 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
     163	IS_INSTANCE REF(class MyException)
     163	CZJUMP (BOOL)NE ? 5 : 6
     
-  5: pred: List(21, 4) succs: List(3, 20) flags: <closed>
+  5: pred: List(21, 4) succs: List(3, 22) flags: <closed>
     163	LOAD_LOCAL(value temp14: REF(class Throwable))
     163	CHECK_CAST REF(class MyException)
     159	STORE_LOCAL(value temp15: REF(class MyException))
@@ -126,21 +126,21 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
     176	LOAD_LOCAL(value message: REF(class String))
     176	CALL_METHOD MyException.<init> (static-instance)
     ?	STORE_LOCAL(variable exc2: REF(class Throwable))
-    ?	JUMP 20
+    ?	JUMP 22
     
-  6: pred: List(21, 4) succs: List(3, 20) flags: <closed>
+  6: pred: List(21, 4) succs: List(3, 22) flags: <closed>
     163	LOAD_LOCAL(value ex$5: REF(class Throwable))
     ?	STORE_LOCAL(variable exc2: REF(class Throwable))
-    ?	JUMP 20
+    ?	JUMP 22
     
-  20: pred: List(5, 6) succs: List() flags: <closed>
+  22: pred: List(5, 6) succs: List() flags: <closed>
     178	LOAD_MODULE module Predef
     178	CONSTANT("finally")
     178	CALL_METHOD scala.Predef.println (dynamic)
     179	LOAD_LOCAL(variable exc2: REF(class Throwable))
     179	THROW(Throwable)
     
-  3: pred: List(1, 15, 16, 22, 18, 11, 12, 13, 21, 4, 5, 6) succs: List() flags: <closed> <exheader>
+  3: pred: List(1, 15, 16, 20, 18, 11, 12, 13, 21, 4, 5, 6) succs: List() flags: <closed> <exheader>
     177	LOAD_EXCEPTION(class Throwable)
     177	STORE_LOCAL(variable exc2: REF(class Throwable))
     178	LOAD_MODULE module Predef
@@ -154,10 +154,10 @@ module class TestInlineHandlersNestedHandlerAllInline extends <root>#java#lang#O
     catch (Throwable) in List(15, 16, 18) starting at: 11
       consisting of blocks: List(14, 13, 12, 11)
       with finalizer: null
-    catch (Throwable) in List(11, 12, 13, 14, 15, 16, 18, 22) starting at: 4
+    catch (Throwable) in List(11, 12, 13, 14, 15, 16, 18, 20) starting at: 4
       consisting of blocks: List(7, 6, 5, 4)
       with finalizer: null
-    catch (<none>) in List(4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 18, 21, 22) starting at: 3
+    catch (<none>) in List(4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 18, 20, 21) starting at: 3
       consisting of blocks: List(3)
       with finalizer: null
     

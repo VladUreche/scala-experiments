@@ -79,9 +79,8 @@ abstract class InlineExceptionHandlers extends SubComponent {
     var tfaCache: Map[Int, tfa.lattice.Elem] = Map.empty
     var analyzedMethod: IMethod = null
 
-    /* This set stores the blocks that were analyzed and have no more inlining opportunities */
-    var todoBlocks = Set.empty[BasicBlock]
-    var doneBlocks = Set.empty[BasicBlock]
+    /* Blocks that need to be analyzed */
+    var todoBlocks: List[BasicBlock] = Nil
 
     /* Used only for warnings */
     var currentClass: IClass = null
@@ -115,14 +114,12 @@ abstract class InlineExceptionHandlers extends SubComponent {
     def apply(method: IMethod): Unit = {
 
       if (method.code ne null) {
-        // empty the list of copy blocks
-        doneBlocks = Set.empty[BasicBlock]
-
         // create the list of starting blocks
-        todoBlocks = method.code.blocks.filter(_.predecessors.length > 0).toSet + method.code.startBlock
+        todoBlocks = global.icodes.linearizer.linearize(method)
 
-        while (todoBlocks.size > doneBlocks.size) { // XXX: Should we set a threshhold for the inlining depth/count?
-          val levelBlocks = todoBlocks -- doneBlocks
+        while (todoBlocks.length > 0) {
+          val levelBlocks = todoBlocks
+          todoBlocks = Nil
           for (bblock <- levelBlocks)
             apply(bblock) // new blocks will be added to todoBlocks
         }
@@ -131,8 +128,7 @@ abstract class InlineExceptionHandlers extends SubComponent {
       // Cleanup the references after we finished the file
       handlerCopies = Map.empty
       handlerCopiesInverted = Map.empty
-      todoBlocks = Set.empty
-      doneBlocks = Set.empty
+      todoBlocks = Nil
 
       // Type flow analysis cleanup
       analyzedMethod = null
@@ -143,7 +139,6 @@ abstract class InlineExceptionHandlers extends SubComponent {
     /** Apply exception handler inlining to a basic block  */
     def apply(bblock: BasicBlock): Unit = {
       var index = 0
-      doneBlocks = doneBlocks + bblock
 
       for (instr <- bblock) {
         instr match {
@@ -451,7 +446,7 @@ abstract class InlineExceptionHandlers extends SubComponent {
 
           // announce the duplicate handler
           handlerCopiesInverted = handlerCopiesInverted + (copy -> ((handler, caughtException)))
-          todoBlocks = todoBlocks + copy
+          todoBlocks = copy :: todoBlocks
 
           Some((exceptionLocal, copy))
 
