@@ -284,3 +284,40 @@ object TestInlineHandlersPreciseness {
         }
     }
 }
+
+/** This check should verify that the double no-local exception handler is duplicated correctly */ 
+object TestInlineHandlersDoubleNoLocal {
+
+    val a1: String = "a"
+    val a2: String = "b"
+
+    def main(args: Array[String]): Unit = {
+        println("TestInlineHandlersDoubleNoLocal")
+        
+        try {
+          a1.synchronized {
+            a2. synchronized {
+              throw new MyException("crash")
+            }
+          }
+        } catch {
+          case t: Throwable => println("Caught crash: " + t.toString)
+        }
+
+/*        try {
+          val exception: Throwable = 
+            if (scala.util.Random.nextInt % 2 == 0)
+              new IllegalArgumentException("even")
+            else
+              new StackOverflowError("odd")
+          throw exception
+        } catch {
+          case e: IllegalArgumentException =>
+            println("Correct, IllegalArgumentException")
+          case e: StackOverflowError =>
+            println("Correct, StackOverflowException")
+          case t: Throwable =>
+            println("WROOOONG, not Throwable!")
+        }*/
+    }
+}
