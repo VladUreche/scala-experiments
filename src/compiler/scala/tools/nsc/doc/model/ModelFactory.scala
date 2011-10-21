@@ -246,12 +246,65 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
        // Only this class's constructors are part of its members, inherited constructors are not.
       sym.info.members.filter(s => localShouldDocument(s) && (!s.isConstructor || s.owner == sym))
 
+    // Implicit logic here
+    if (sym.isClass || sym.isTrait) {
+		println("\n\n" + this.qualifiedName + "\n" + "=" * this.qualifiedName.length())
+		
+		val tree: Tree = EmptyTree
+		val expType: Type = global.definitions.functionType(List(sym.tpe.normalize), AnyClass.tpe)
+		val isView: Boolean = true
+		val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)
+		val implicitSearch = new global.analyzer.ImplicitSearch(tree, expType, isView, context)		
+	    println()
+		
+		implicitSearch.allImplicits.foreach({
+		 result =>
+		   println(" * " + result + ": ")
+		   val tree = result.tree
+		   val subst = result.subst
+		   		   		   
+		   def getResultType(ty: Type): Option[Type] = ty match {
+		     case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
+		       // TODO: Add stuff to substitutions
+		       getResultType(resultType)
+		     case resultType: UniqueTypeRef =>
+		       Some(resultType)
+		     case _ =>
+		       None
+		   }
+		   
+		   getResultType(tree.tpe.resultType) match { 
+		     case Some(implicitResultType) =>		     
+			   // TODO: Need to make sure we don't shadow any of the members in the original class
+			   val implicitMembers = implicitResultType.members.filter((s => implicitShouldDocument(s)))
+			   val implicitMemberStrings = implicitMembers.map(x => x.toString + ": " + x.tpe.asSeenFrom(implicitResultType, x.owner).toString)
+			   println("     - final type:       " + tree.tpe.resultType)
+			   println("     - substitutions:    " + subst)
+			   println("     - implicit members: " + implicitMemberStrings.mkString("\n         - ","\n         - ", "\n"))
+		     case None =>
+		       println("     - could not extract info out of: " + tree.tpe.resultType + " of type " + tree.tpe.resultType.getClass)
+		   }
+		})	    
+		/* 
+		 * Stuff that needs to be done:
+		 *  - decide where and how to add member information in the Class (note: need to make the asSeenFrom transformation!!!)
+		 *    - figure out how to interface with the "Inherited from ..." in the html
+		 *    - figure out how to add the condition
+		 *    - figure out how to add the implicit method
+		 *  - translate TreeTypeSubstituters to intelligible strings (with types?)
+		 *  - make sure we don't shadow any of the members in the original class
+		 *  - add the information in the right place
+		 *  - support translation to html... somehow :-s
+		 */
+    }        
+            
     val members       = memberSyms flatMap (makeMember(_, this))
     val templates     = members collect { case c: DocTemplateEntity => c }
     val methods       = members collect { case d: Def => d }
     val values        = members collect { case v: Val => v }
     val abstractTypes = members collect { case t: AbstractType => t }
     val aliasTypes    = members collect { case t: AliasType => t }
+    
     override def isTemplate = true
     def isDocTemplate = true
     def companion = sym.companionSymbol match {
@@ -687,5 +740,9 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 
   def localShouldDocument(aSym: Symbol): Boolean = {
     !aSym.isPrivate && (aSym.isProtected || aSym.privateWithin == NoSymbol) && !aSym.isSynthetic
+  }
+  
+  def implicitShouldDocument(aSym: Symbol): Boolean = {
+    localShouldDocument(aSym) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) && (!aSym.isConstructor) 
   }
 }

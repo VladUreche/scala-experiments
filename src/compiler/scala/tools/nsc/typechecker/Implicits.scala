@@ -761,7 +761,11 @@ trait Implicits {
       
       /** Returns all eligible ImplicitInfos and their SearchResults in a map.
        */
-      def findAll() = eligible map (info => (info, typedImplicit(info, false))) toMap
+      def findAll() = {
+        val elig = eligible
+        elig foreach (x => println(" * eligible: " + x))
+        elig map (info => (info, typedImplicit(info, false))) toMap
+      }
       
       /** Returns the SearchResult of the best match.
        */
@@ -1189,6 +1193,8 @@ trait Implicits {
 
     def allImplicits: List[SearchResult] = {
       def search(iss: Infoss, isLocal: Boolean) = applicableInfos(iss, isLocal).values
+      //context.implicitss.foreach(_.foreach(x => println(" * in context: " + x)))
+      implicitsOfExpectedType.foreach(_.foreach(x => println(" * local: " + x)))
       (search(context.implicitss, true) ++ search(implicitsOfExpectedType, false)).toList.filter(_.tree ne EmptyTree)
     }
   }
