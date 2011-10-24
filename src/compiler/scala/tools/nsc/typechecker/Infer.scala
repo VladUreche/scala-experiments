@@ -85,6 +85,8 @@ trait Infer {
       case WildcardType | BoundedWildcardType(_) | NoType =>
         throw new NoInstance("undetermined type")
       case tv @ TypeVar(origin, constr) =>
+        println("got typevar: "+ tp)
+        Thread.dumpStack()
         if (constr.inst == NoType) {
           throw new DeferredNoInstance(() =>
             "no unique instantiation of type variable " + origin + " could be found")

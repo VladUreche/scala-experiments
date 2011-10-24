@@ -251,12 +251,22 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 		println("\n\n" + this.qualifiedName + "\n" + "=" * this.qualifiedName.length())
 		
 		val tree: Tree = EmptyTree
-		val expType: Type = global.definitions.functionType(List(sym.tpe.normalize), AnyClass.tpe)
+		val newtpe = sym.tpe.subst(sym.typeParams, sym.typeParams map (x => WildcardType)) // (TypeVar.apply(_)))
+		val expType: Type = global.definitions.functionType(List(newtpe.normalize), AnyClass.tpe)
 		val isView: Boolean = true
+		
 		val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)
+		//context.undetparams = sym.typeParams ::: context.undetparams
+		//context.outer.undetparams = sym.typeParams ::: context.outer.undetparams
+		//println("type: " + sym.tpe + "  " + sym.tpe.getClass())
+		//println("info: " + sym.info + "  " + sym.info.getClass())
+		println("context.undetparams: " + context.undetparamsString)
+		
+		
 		val implicitSearch = new global.analyzer.ImplicitSearch(tree, expType, isView, context)		
 	    println()
-		
+
+	    
 		implicitSearch.allImplicits.foreach({
 		 result =>
 		   println(" * " + result + ": ")
@@ -267,7 +277,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 		     case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
 		       // TODO: Add stuff to substitutions
 		       getResultType(resultType)
-		     case resultType: UniqueTypeRef =>
+		     case resultType: TypeRef =>
 		       Some(resultType)
 		     case _ =>
 		       None
