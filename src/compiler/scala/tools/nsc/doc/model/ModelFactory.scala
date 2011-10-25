@@ -251,8 +251,9 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 		println("\n\n" + this.qualifiedName + "\n" + "=" * this.qualifiedName.length())
 		
 		val tree: Tree = EmptyTree
-		val newtpe = sym.tpe.subst(sym.typeParams, sym.typeParams map (x => WildcardType)) // (TypeVar.apply(_)))
-		val expType: Type = global.definitions.functionType(List(newtpe.normalize), AnyClass.tpe)
+		//val newtpe = sym.tpe.subst(sym.typeParams, sym.typeParams map (TypeVar.apply(_))) //(x => WildcardType)) 
+		//val expType: Type = global.definitions.functionType(List(newtpe.normalize), AnyClass.tpe)
+		val expType: Type = global.definitions.functionType(List(sym.tpe.normalize), AnyClass.tpe)
 		val isView: Boolean = true
 		
 		val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)

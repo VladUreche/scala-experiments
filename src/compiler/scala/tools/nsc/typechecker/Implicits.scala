@@ -375,7 +375,7 @@ trait Implicits {
         }
 
     /** The type parameters to instantiate */
-    val undetParams = if (isView) List() else context.outer.undetparams
+    val undetParams = context.outer.undetparams //if (isView) List() else context.outer.undetparams
 
     def approximate(tp: Type) =
       if (undetParams.isEmpty) tp
@@ -763,7 +763,7 @@ trait Implicits {
        */
       def findAll() = {
         val elig = eligible
-        elig foreach (x => println(" * eligible: " + x))
+        //elig foreach (x => println("\n\n\n : " + x + "\n\n"))
         elig map (info => (info, typedImplicit(info, false))) toMap
       }
       
@@ -814,6 +814,7 @@ trait Implicits {
     def applicableInfos(iss: Infoss, isLocal: Boolean): Map[ImplicitInfo, SearchResult] = {
       val start       = startCounter(subtypeAppInfos)
       val computation = new ImplicitComputation(iss, if (isLocal) util.HashSet[Name](512) else null) { }
+      //println("applicableInfos: " + isLocal)
       val applicable  = computation.findAll()
 
       stopCounter(subtypeAppInfos, start)
@@ -1194,7 +1195,7 @@ trait Implicits {
     def allImplicits: List[SearchResult] = {
       def search(iss: Infoss, isLocal: Boolean) = applicableInfos(iss, isLocal).values
       //context.implicitss.foreach(_.foreach(x => println(" * in context: " + x)))
-      implicitsOfExpectedType.foreach(_.foreach(x => println(" * local: " + x)))
+      //implicitsOfExpectedType.foreach(_.foreach(x => println(" * local: " + x)))
       (search(context.implicitss, true) ++ search(implicitsOfExpectedType, false)).toList.filter(_.tree ne EmptyTree)
     }
   }
