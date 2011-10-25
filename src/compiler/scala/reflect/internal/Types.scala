@@ -5518,7 +5518,10 @@ A type's typeSymbol should never be inspected directly.
       else if (isNumericSubType(t2, t1)) t2
       else NoType)
 
-  def isWeakSubType(tp1: Type, tp2: Type) = 
+  // TODO: this should not normalize eagerly, as it breaks type inference involving type aliases (to numeric types)
+  // (in isSubType we're careful only to normalize as a second attempt, so that something like this type checks:
+  // type Foo[T] = Long; def bar[T](x: Foo[T]): T = ???; bar(??? : Foo[String])): String)
+  def isWeakSubType(tp1: Type, tp2: Type) =
     tp1.deconst.normalize match {
       case TypeRef(_, sym1, _) if isNumericValueClass(sym1) =>
         tp2.deconst.normalize match {
