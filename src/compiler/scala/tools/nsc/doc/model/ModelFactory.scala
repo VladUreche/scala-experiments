@@ -21,6 +21,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 
   import global._
   import definitions.{ ObjectClass, ScalaObjectClass, RootPackage, EmptyPackage, NothingClass, AnyClass, AnyValClass, AnyRefClass }
+  import model.comment.Block // shadow global's Block
 
   private var droppedPackages = 0
   def templatesCount = templatesCache.size - droppedPackages
@@ -242,73 +243,16 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     }
     def subClasses = if (subClassesCache == null) Nil else subClassesCache.toList
 
-    protected lazy val memberSyms =
-       // Only this class's constructors are part of its members, inherited constructors are not.
-      sym.info.members.filter(s => localShouldDocument(s) && (!s.isConstructor || s.owner == sym))
-
-    // Implicit logic here
-    if (sym.isClass || sym.isTrait) {
-		println("\n\n" + this.qualifiedName + "\n" + "=" * this.qualifiedName.length())
-		
-		val tree: Tree = EmptyTree
-		//val newtpe = sym.tpe.subst(sym.typeParams, sym.typeParams map (TypeVar.apply(_))) //(x => WildcardType)) 
-		//val expType: Type = global.definitions.functionType(List(newtpe.normalize), AnyClass.tpe)
-		val expType: Type = global.definitions.functionType(List(sym.tpe.normalize), AnyClass.tpe)
-		val isView: Boolean = true
-		
-		val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)
-		//context.undetparams = sym.typeParams ::: context.undetparams
-		//context.outer.undetparams = sym.typeParams ::: context.outer.undetparams
-		//println("type: " + sym.tpe + "  " + sym.tpe.getClass())
-		//println("info: " + sym.info + "  " + sym.info.getClass())
-		println("context.undetparams: " + context.undetparamsString)
-		
-		
-		val implicitSearch = new global.analyzer.ImplicitSearch(tree, expType, isView, context)		
-	    println()
-
-	    
-		implicitSearch.allImplicits.foreach({
-		 result =>
-		   println(" * " + result + ": ")
-		   val tree = result.tree
-		   val subst = result.subst
-		   		   		   
-		   def getResultType(ty: Type): Option[Type] = ty match {
-		     case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
-		       // TODO: Add stuff to substitutions
-		       getResultType(resultType)
-		     case resultType: TypeRef =>
-		       Some(resultType)
-		     case _ =>
-		       None
-		   }
-		   
-		   getResultType(tree.tpe.resultType) match { 
-		     case Some(implicitResultType) =>		     
-			   // TODO: Need to make sure we don't shadow any of the members in the original class
-			   val implicitMembers = implicitResultType.members.filter((s => implicitShouldDocument(s)))
-			   val implicitMemberStrings = implicitMembers.map(x => x.toString + ": " + x.tpe.asSeenFrom(implicitResultType, x.owner).toString)
-			   println("     - final type:       " + tree.tpe.resultType)
-			   println("     - substitutions:    " + subst)
-			   println("     - implicit members: " + implicitMemberStrings.mkString("\n         - ","\n         - ", "\n"))
-		     case None =>
-		       println("     - could not extract info out of: " + tree.tpe.resultType + " of type " + tree.tpe.resultType.getClass)
-		   }
-		})	    
-		/* 
-		 * Stuff that needs to be done:
-		 *  - decide where and how to add member information in the Class (note: need to make the asSeenFrom transformation!!!)
-		 *    - figure out how to interface with the "Inherited from ..." in the html
-		 *    - figure out how to add the condition
-		 *    - figure out how to add the implicit method
-		 *  - translate TreeTypeSubstituters to intelligible strings (with types?)
-		 *  - make sure we don't shadow any of the members in the original class
-		 *  - add the information in the right place
-		 *  - support translation to html... somehow :-s
-		 */
-    }        
-            
+    protected lazy val memberSyms = {
+      
+      val directMembers = sym.info.members
+      val directMemberNames = directMembers.map(_.name)
+      val implicitMembers = membersByImplicitConversions(sym, this).filterNot((s: Symbol) => directMemberNames.contains(s.name))
+      
+      // Only this class's constructors are part of its members, inherited constructors are not.
+      (directMembers ::: implicitMembers).filter(s => localShouldDocument(s) && (!s.isConstructor || s.owner == sym))        
+    }
+    
     val members       = memberSyms flatMap (makeMember(_, this))
     val templates     = members collect { case c: DocTemplateEntity => c }
     val methods       = members collect { case d: Def => d }
@@ -334,11 +278,13 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 
   abstract class RootPackageImpl(sym: Symbol) extends PackageImpl(sym, null) with RootPackageEntity
   
-  abstract class NonTemplateMemberImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends MemberImpl(sym, inTpl) with NonTemplateMemberEntity {
+  abstract class NonTemplateMemberImpl(sym: Symbol, inTpl: => DocTemplateImpl, implConv: => ImplicitConversion = null) extends MemberImpl(sym, inTpl) with NonTemplateMemberEntity {
     override def qualifiedName = optimize(inTemplate.qualifiedName + "#" + name)
     lazy val definitionName = optimize(inDefinitionTemplates.head.qualifiedName + "#" + name)
     def isUseCase = sym.isSynthetic
     def isBridge = sym.isBridge
+    def byImplicitConversion = (implConv ne null)
+    def implicitConversion = if (implConv ne null) Some(implConv) else None
   }
   
   abstract class NonTemplateParamMemberImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends NonTemplateMemberImpl(sym, inTpl) {
@@ -756,4 +702,79 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   def implicitShouldDocument(aSym: Symbol): Boolean = {
     localShouldDocument(aSym) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) && (!aSym.isConstructor) 
   }
+  
+  def membersByImplicitConversions(sym: Symbol, inTpl: => TemplateImpl): List[Symbol] = {
+    if (!(sym.isClass || sym.isTrait))
+      Nil
+    else {
+      println("\n\n" + sym.nameString + "\n" + "=" * sym.nameString.length())
+      
+      val tree: Tree = EmptyTree
+      //val newtpe = sym.tpe.subst(sym.typeParams, sym.typeParams map (TypeVar.apply(_))) //(x => WildcardType)) 
+      //val expType: Type = global.definitions.functionType(List(newtpe.normalize), AnyClass.tpe)
+      val expType: Type = global.definitions.functionType(List(sym.tpe.normalize), AnyClass.tpe)
+      val isView: Boolean = true
+		
+      val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)
+      //context.undetparams = sym.typeParams ::: context.undetparams
+      //context.outer.undetparams = sym.typeParams ::: context.outer.undetparams
+      //println("type: " + sym.tpe + "  " + sym.tpe.getClass())
+      //println("info: " + sym.info + "  " + sym.info.getClass())
+      println("context.undetparams: " + context.undetparamsString)
+      val implicitSearch = new global.analyzer.ImplicitSearch(tree, expType, isView, context)
+      println()
+      
+      implicitSearch.allImplicits.foreach({
+        result => 
+          val implicitConv = makeImplicitConversion(result, inTpl)
+		})	    
+		Nil
+	}
+  }
+  
+  def makeImplicitConversion(result: global.analyzer.SearchResult, inTpl: => TemplateImpl): Option[ImplicitConversion] = {
+
+    var implConstraints: List[Block] = Nil
+    
+	println(" * " + result + ": ")
+    
+    def getResultType(ty: Type): Option[Type] = ty match {
+	  case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
+	    implConstraints = implConstraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(param.tpe.toString))::Nil)))
+	    getResultType(resultType)
+	  case resultType: TypeRef =>
+	    Some(resultType)
+	  case _ =>
+	    None
+	}
+
+    val targetType = 
+      getResultType(result.tree.tpe.resultType) match { 
+	    case Some(implicitResultType) =>		     
+	      // TODO: Need to make sure we don't shadow any of the members in the original class
+	      val implicitMembers = implicitResultType.members.filter((s => implicitShouldDocument(s)))
+	      val implicitMemberStrings = implicitMembers.map(x => x.toString + ": " + x.tpe.asSeenFrom(implicitResultType, x.owner).toString)
+	      println("     - final type:       " + result.tree.tpe.resultType)
+	      println("     - substitutions:    " + result.subst)
+	      println("     - implicit members: " + implicitMemberStrings.mkString("\n         - ","\n         - ", "\n"))
+	      Some(result.tree.tpe.resultType)
+        case None =>
+	      println("     - could not extract info out of: " + result.tree.tpe.resultType + " of type " + result.tree.tpe.resultType.getClass)
+	      None
+	  }	
+
+    // TODO: translate TreeTypeSubstituters to intelligible strings (with types?)
+    
+    targetType match {
+      case Some(tpe) =>
+        Some(new ImplicitConversion{ 
+          val target = makeType(tpe, inTpl) 
+          val convertor = Body(List(Code(result.tree.toString)))
+          val constraints = Body(List(UnorderedList(implConstraints)))}
+        )
+      case _ =>
+        None
+    }
+  }  
 }
+

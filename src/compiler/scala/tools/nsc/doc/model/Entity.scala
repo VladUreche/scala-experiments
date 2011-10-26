@@ -129,7 +129,7 @@ trait MemberEntity extends Entity {
 
   /** Some migration warning if this member has a migration annotation, or none otherwise. */
   def migration: Option[Body]
-
+  
   @deprecated("Use `inDefinitionTemplates` instead", "2.9.0")
   def inheritedFrom: List[TemplateEntity]
 
@@ -232,7 +232,7 @@ trait DocTemplateEntity extends TemplateEntity with MemberEntity {
 
   /** All methods that are members of this template. */
   def methods: List[Def]
-
+  
   /** All values, lazy values and variables that are members of this template. */
   def values: List[Val]
 
@@ -304,7 +304,10 @@ trait NonTemplateMemberEntity extends MemberEntity {
   /** Whether this member is a bridge member. A bridge member does only exist for binary compatibility reasons
     * and should not appear in ScalaDoc. */
   def isBridge: Boolean
-
+    
+  /** If this member originates from an implicit conversion of the current class to something else we set the 
+   *  implicit information to the correct origin */
+  def implicitConversion: Option[ImplicitConversion]
 }
 
 
@@ -408,4 +411,18 @@ trait Annotation extends Entity {
   /** The arguments passed to the constructor of the annotation class. */
   def arguments: List[ValueArgument]
   
+}
+
+
+/** A trait that offers more information on implicit conversions */
+trait ImplicitConversion {
+  
+  /** The result type after the conversion */
+  def target: TypeEntity
+  
+  /** The entity that performed the conversion */
+  def convertor: Body   
+  
+  /** The constraints that the transformations puts on the type parameters */
+  def constraints: Body
 }
