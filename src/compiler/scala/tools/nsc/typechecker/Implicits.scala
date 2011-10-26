@@ -77,6 +77,28 @@ trait Implicits {
     result
   }
 
+  /** Find all views from type `tp` (in which `tpars` are free)
+   *
+   * Note that the trees in the search results in the returned list share the same type variables.
+   * Ignore their constr field! The list of type constraints returned along with each tree specifies the constraints that
+   * must be met by the corresponding type parameter in `tpars` (for the returned implicit view to be valid).
+   *
+   * @arg tp      from-type for the implicit conversion
+   * @arg context search implicits here
+   * @arg tpars   symbols that should be considered free type variables
+   *              (implicit search should not try to solve them, just track their constraints)
+   */
+  def allViewsFrom(tp: Type, context: Context, tpars: List[Symbol]): List[(SearchResult, List[TypeConstraint])] = {
+    // my untouchable typevars are better than yours (they can't be constrained by them)
+    val tvars = tpars map (TypeVar.apply(_, untouchable = true))
+    val tpSubsted = tp.subst(tpars, tvars)
+
+    val search = new ImplicitSearch(EmptyTree, functionType(List(tpSubsted), AnyClass.tpe), true, context.makeImplicit(false))
+
+    search.allImplicitsPoly(tvars)
+  }
+
+
   private final val sizeLimit = 50000
   private type Infos = List[ImplicitInfo]
   private type Infoss = List[List[ImplicitInfo]]
@@ -1185,6 +1207,24 @@ trait Implicits {
     def allImplicits: List[SearchResult] = {
       def search(iss: Infoss, isLocal: Boolean) = applicableInfos(iss, isLocal).values
       (search(context.implicitss, true) ++ search(implicitsOfExpectedType, false)).toList.filter(_.tree ne EmptyTree)
+    }
+
+    // find all implicits for some type that contains type variables
+    // collect the constraints that result from typing each implicit
+    def allImplicitsPoly(tvars: List[TypeVar]): List[(SearchResult, List[TypeConstraint])] = {
+      def resetTVars() = tvars foreach { _.constr = new TypeConstraint }
+
+      def eligibleInfos(iss: Infoss, isLocal: Boolean) = new ImplicitComputation(iss, if (isLocal) util.HashSet[Name](512) else null).eligible
+      val allEligibleInfos = (eligibleInfos(context.implicitss, true) ++ eligibleInfos(implicitsOfExpectedType, false)).toList
+
+      allEligibleInfos flatMap { ii =>
+        // each ImplicitInfo contributes a distinct set of constraints (generated indirectly by typedImplicit)
+        // thus, start each type var off with a fresh for every typedImplicit
+        resetTVars()
+        val res = typedImplicit(ii, false)
+        if (res.tree ne EmptyTree) List((res, tvars map (_.constr)))
+        else Nil
+      }
     }
   }
 
