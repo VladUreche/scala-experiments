@@ -44,7 +44,7 @@ class Settings(error: String => Unit) extends scala.tools.nsc.Settings(error) {
   val docfooter = StringSetting (
     "-doc-footer",
     "footer",
-    "A footer on every ScalaDoc page, by default the EPFL/Typesafe copyright notice. Can be overridden with a custom footer.",
+    "A footer on every ScalaDoc page, by default the EPFL/Typesafe copyright notice. Can be overridden with a custom footer",
     ""
   )
 
@@ -83,10 +83,15 @@ class Settings(error: String => Unit) extends scala.tools.nsc.Settings(error) {
 
   val docRootContent = PathSetting (
     "-doc-root-content",
-    "The file from which the root package documentation should be imported.",
+    "The file from which the root package documentation should be imported",
     ""
   )
 
+  val debugModelFactory = BooleanSetting (
+    "-Ydebug-model-factory",
+    "Debug the operations done in the Model factory"
+  )
+  
   // Somewhere slightly before r18708 scaladoc stopped building unless the
   // self-type check was suppressed.  I hijacked the slotted-for-removal-anyway
   // suppress-vt-warnings option and renamed it for this purpose.
