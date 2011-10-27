@@ -262,17 +262,14 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     }
     def subClasses = if (subClassesCache == null) Nil else subClassesCache.toList
 
-    protected lazy val memberSyms = {
-      
-      val directMembers = sym.info.members
-      val directMemberNames = directMembers.map(_.name)
-      val implicitMembers = membersByImplicitConversions(sym, this).filterNot((s: Symbol) => directMemberNames.contains(s.name))
-      
+    protected lazy val memberSyms =             
       // Only this class's constructors are part of its members, inherited constructors are not.
-      (directMembers ::: implicitMembers).filter(s => localShouldDocument(s) && (!s.isConstructor || s.owner == sym))        
-    }
+      sym.info.members.filter(s => localShouldDocument(s) && (!s.isConstructor || s.owner == sym))
     
-    val members       = memberSyms flatMap (makeMember(_, this))
+    val memberNames = sym.info.members.map(_.name).toSet
+    val implicitMembers = membersByImplicitConversions(sym, this).filterNot { case (sym, implConv) => memberNames.contains(sym.name) }
+    
+    val members       = (memberSyms flatMap (makeMember(_, null, this))) ::: (implicitMembers flatMap { case (sym, implConv) => makeMember(sym, implConv, this) })
     val templates     = members collect { case c: DocTemplateEntity => c }
     val methods       = members collect { case d: Def => d }
     val values        = members collect { case v: Val => v }
@@ -300,7 +297,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 
   abstract class RootPackageImpl(sym: Symbol) extends PackageImpl(sym, null) with RootPackageEntity
   
-  abstract class NonTemplateMemberImpl(sym: Symbol, inTpl: => DocTemplateImpl, implConv: => ImplicitConversion = null) extends MemberImpl(sym, inTpl) with NonTemplateMemberEntity {
+  abstract class NonTemplateMemberImpl(sym: Symbol, implConv: => ImplicitConversion, inTpl: => DocTemplateImpl) extends MemberImpl(sym, inTpl) with NonTemplateMemberEntity {
     dbg("NonTemplateMemberImpl(" + sym + ", inTpl, implConv) - started")
     override def qualifiedName = optimize(inTemplate.qualifiedName + "#" + name)
     lazy val definitionName = optimize(inDefinitionTemplates.head.qualifiedName + "#" + name)
@@ -311,7 +308,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     dbg("NonTemplateMemberImpl(" + sym + ", inTpl, implConv) - finished")
   }
   
-  abstract class NonTemplateParamMemberImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends NonTemplateMemberImpl(sym, inTpl) {
+  abstract class NonTemplateParamMemberImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends NonTemplateMemberImpl(sym, null, inTpl) {
     dbg("NonTemplateParameterMemberImpl(" + sym + ", inTpl) - started")
     def valueParams =
       sym.paramss map { ps => (ps.zipWithIndex) map { case (p, i) =>
@@ -498,18 +495,18 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   }
 
   /** */
-  def makeMember(aSym: Symbol, inTpl: => DocTemplateImpl): List[MemberImpl] = {
+  def makeMember(aSym: Symbol, implConv: => ImplicitConversion, inTpl: => DocTemplateImpl): List[MemberImpl] = {
     dbg("makeMember(" + aSym + ", inTpl)")      	
 
     def makeMember0(bSym: Symbol): Option[MemberImpl] = {
       if (bSym.isGetter && bSym.isLazy) 
-          Some(new NonTemplateMemberImpl(bSym, inTpl) with Val {
+          Some(new NonTemplateMemberImpl(bSym, implConv, inTpl) with Val {
             override lazy val comment = // The analyser does not duplicate the lazy val's DocDef when it introduces its accessor.
               thisFactory.comment(bSym.accessed, inTpl) // This hack should be removed after analyser is fixed.
             override def isLazyVal = true
           })
       else if (bSym.isGetter && bSym.accessed.isMutable)
-        Some(new NonTemplateMemberImpl(bSym, inTpl) with Val {
+        Some(new NonTemplateMemberImpl(bSym, implConv, inTpl) with Val {
           override def isVar = true
         })
       else if (bSym.isMethod && !bSym.hasAccessorFlag && !bSym.isConstructor && !bSym.isModule) {
@@ -534,15 +531,15 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
           def isPrimary = sym.isPrimaryConstructor
         })
       else if (bSym.isGetter) // Scala field accessor or Java field
-        Some(new NonTemplateMemberImpl(bSym, inTpl) with Val {
+        Some(new NonTemplateMemberImpl(bSym, implConv, inTpl) with Val {
           override def isVal = true
         })
       else if (bSym.isAbstractType)
-        Some(new NonTemplateMemberImpl(bSym, inTpl) with TypeBoundsImpl with HigherKindedImpl with AbstractType {
+        Some(new NonTemplateMemberImpl(bSym, implConv, inTpl) with TypeBoundsImpl with HigherKindedImpl with AbstractType {
           override def isAbstractType = true
         })
       else if (bSym.isAliasType)
-        Some(new NonTemplateMemberImpl(bSym, inTpl) with HigherKindedImpl with AliasType {
+        Some(new NonTemplateMemberImpl(bSym, implConv, inTpl) with HigherKindedImpl with AliasType {
           override def isAliasType = true
           def alias = makeTypeInTemplateContext(sym.tpe.dealias, inTpl, sym)
         })
@@ -745,10 +742,13 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   }
   
   def implicitShouldDocument(aSym: Symbol): Boolean = {
-    localShouldDocument(aSym) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) && (!aSym.isConstructor) 
+  	// We shouldn't document:
+  	// - common methods (in Any, AnyRef, Object) as they are automatically removed
+  	// - constructors
+    localShouldDocument(aSym) && (!aSym.isConstructor) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) 
   }
   
-  def membersByImplicitConversions(sym: Symbol, inTpl: => TemplateImpl): List[Symbol] = {
+  def membersByImplicitConversions(sym: Symbol, inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {
     if (!(sym.isClass || sym.isTrait))
       Nil
     else {
@@ -769,57 +769,50 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
       val implicitSearch = new global.analyzer.ImplicitSearch(tree, expType, isView, context)
       println()
       
-      implicitSearch.allImplicits.foreach({
-        result => 
-          val implicitConv = makeImplicitConversion(result, inTpl)
-		})	    
-		Nil
-	}
+      implicitSearch.allImplicits flatMap { case result: global.analyzer.SearchResult => getMembersSymbols(result, inTpl) }
+    }
   }
   
-  def makeImplicitConversion(result: global.analyzer.SearchResult, inTpl: => TemplateImpl): Option[ImplicitConversion] = {
-
-    var implConstraints: List[Block] = Nil
-    
-	println(" * " + result + ": ")
+  def getMembersSymbols(result: global.analyzer.SearchResult, inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {    
+  	var implConstraints: List[Block] = Nil
+		println(" * " + result + ": ")
     
     def getResultType(ty: Type): Option[Type] = ty match {
-	  case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
-	    implConstraints = implConstraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(param.tpe.toString))::Nil)))
-	    getResultType(resultType)
-	  case resultType: TypeRef =>
-	    Some(resultType)
-	  case _ =>
-	    None
-	}
+		  case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
+		    implConstraints = implConstraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(param.tpe.toString))::Nil)))
+		    getResultType(resultType)
+		  case resultType: TypeRef =>
+		    Some(resultType)
+		  case _ =>
+		    None
+  	}
 
-    val targetType = 
-      getResultType(result.tree.tpe.resultType) match { 
-	    case Some(implicitResultType) =>		     
-	      // TODO: Need to make sure we don't shadow any of the members in the original class
-	      val implicitMembers = implicitResultType.members.filter((s => implicitShouldDocument(s)))
-	      val implicitMemberStrings = implicitMembers.map(x => x.toString + ": " + x.tpe.asSeenFrom(implicitResultType, x.owner).toString)
-	      println("     - final type:       " + result.tree.tpe.resultType)
-	      println("     - substitutions:    " + result.subst)
-	      println("     - implicit members: " + implicitMemberStrings.mkString("\n         - ","\n         - ", "\n"))
-	      Some(result.tree.tpe.resultType)
-        case None =>
-	      println("     - could not extract info out of: " + result.tree.tpe.resultType + " of type " + result.tree.tpe.resultType.getClass)
-	      None
-	  }	
-
-    // TODO: translate TreeTypeSubstituters to intelligible strings (with types?)
+    val targetType = getResultType(result.tree.tpe.resultType)
     
-    targetType match {
-      case Some(tpe) =>
-        Some(new ImplicitConversion{ 
-          val target = makeType(tpe, inTpl) 
-          val convertor = Body(List(Code(result.tree.toString)))
-          val constraints = Body(List(UnorderedList(implConstraints)))}
-        )
-      case _ =>
-        None
-    }
+    if (targetType.isDefined) {
+
+    	val implicitResultType = targetType.get		     	    
+	    val implicitMembers = implicitResultType.members.filter((s => implicitShouldDocument(s)))
+	    val implicitMembersAsSeenFrom = implicitMembers.map 
+	    	{ symbol => symbol.cloneSymbol.setInfo(symbol.info.asSeenFrom(implicitResultType, symbol.owner)) }      
+
+	    val implicitMemberStrings = implicitMembersAsSeenFrom.map(x => x.toString + ": " + x.tpe.toString)
+
+      println("     - final type:       " + result.tree.tpe.resultType)
+      println("     - substitutions:    " + result.subst)
+      println("     - implicit members: " + implicitMemberStrings.mkString("\n         - ","\n         - ", "\n"))
+	
+	    // TODO: translate TreeTypeSubstituters to intelligible strings (with types?)
+      	    
+      val implicitConversion = new ImplicitConversion{ 
+											           val target = makeType(implicitResultType, inTpl) 
+											           val convertor = Body(List(Code(result.tree.toString)))
+											           val constraints = Body(List(UnorderedList(implConstraints)))
+											         }
+    	
+	    implicitMembersAsSeenFrom.map(sym => (sym, implicitConversion))
+    } else
+    	Nil
   }  
 }
 
