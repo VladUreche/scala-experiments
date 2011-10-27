@@ -58,7 +58,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter) extends Symb
 
   def mkAttributedQualifier(tpe: Type, termSym: Symbol): Tree = gen.mkAttributedQualifier(tpe, termSym)
   
-  def picklerPhase: Phase = currentRun.picklerPhase
+  def picklerPhase: Phase = if (currentRun.isDefined) currentRun.picklerPhase else NoPhase
     
   // platform specific elements
 
@@ -267,7 +267,6 @@ class Global(var currentSettings: Settings, var reporter: Reporter) extends Symb
     }
 
     // behavior
-    def dependentMethodTypes = settings.YdepMethTpes.value
 
     // debugging
     def checkPhase = wasActive(settings.check)
@@ -1021,7 +1020,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter) extends Symb
 
       reporter.reset()
       checkDeprecatedSettings(unitbuf.head)    
-      globalPhase = firstPhase
+      globalPhase = fromPhase
 
      while (globalPhase != terminalPhase && !reporter.hasErrors) {
         val startTime = currentTime

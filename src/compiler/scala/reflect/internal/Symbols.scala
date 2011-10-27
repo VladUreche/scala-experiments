@@ -91,8 +91,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       new MethodSymbol(this, pos, name).setFlag(METHOD)
     final def newLabel(pos: Position, name: TermName) =
       newMethod(pos, name).setFlag(LABEL)
+
+    /** Propagates ConstrFlags (JAVA, specifically) from owner to constructor. */
     final def newConstructor(pos: Position) =
-      newMethod(pos, nme.CONSTRUCTOR)
+      newMethod(pos, nme.CONSTRUCTOR) setFlag getFlag(ConstrFlags)
+    /** Static constructor with info set. */
+    def newStaticConstructor(pos: Position) =
+      newConstructor(pos) setFlag STATIC setInfo UnitClass.tpe
+    /** Instance constructor with info set. */
+    def newClassConstructor(pos: Position) =
+      newConstructor(pos) setInfo MethodType(Nil, this.tpe)
 
     private def finishModule(m: ModuleSymbol, clazz: ClassSymbol): ModuleSymbol = {
       // Top-level objects can be automatically marked final, but others
@@ -1288,8 +1296,26 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       c
     }
 
-    /** The self symbol of a class with explicit self type, or else the
-     *  symbol itself.
+    /** The self symbol (a TermSymbol) of a class with explicit self type, or else the
+     *  symbol itself (a TypeSymbol). 
+     * 
+     *  WARNING: you're probably better off using typeOfThis, as it's more uniform across classes with and without self variables.
+     * 
+     *  Example by Paul:
+     *   scala> trait Foo1 { }
+     *   scala> trait Foo2 { self => }
+     *   scala> intp("Foo1").thisSym
+     *   res0: $r.intp.global.Symbol = trait Foo1
+     *   
+     *   scala> intp("Foo2").thisSym
+     *   res1: $r.intp.global.Symbol = value self
+     *  
+     *  Martin says: The reason `thisSym' is `this' is so that thisType can be this.thisSym.tpe.
+     *  It's a trick to shave some cycles off.
+     *
+     *  Morale: DO:    if (clazz.typeOfThis.typeConstructor ne clazz.typeConstructor) ...
+     *          DON'T: if (clazz.thisSym ne clazz) ...
+     *
      */
     def thisSym: Symbol = this
 
@@ -1905,6 +1931,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else if (owner.isRefinementClass) ExplicitFlags & ~OVERRIDE
       else ExplicitFlags
     
+    def accessString = hasFlagsToString(PRIVATE | PROTECTED | LOCAL)
     def defaultFlagString = hasFlagsToString(defaultFlagMask)
     private def defStringCompose(infoString: String) = compose(
       defaultFlagString,

@@ -203,11 +203,16 @@ class Flags extends ModifierFlags {
 
   // ------- masks -----------------------------------------------------------------------
   
-  /** These flags can be set when class or module symbol is first created. */
+  /** These flags can be set when class or module symbol is first created.
+   *  They are the only flags to survive a call to resetFlags().
+   */
   final val TopLevelCreationFlags: Long =
     MODULE | PACKAGE | FINAL | JAVA
 
-  /** These modifiers can be set explicitly in source programs. */
+  /** These modifiers can be set explicitly in source programs.  This is
+   *  used only as the basis for the default flag mask (which ones to display
+   *  when printing a normal message.)
+   */
   final val ExplicitFlags: Long =
     PRIVATE | PROTECTED | ABSTRACT | FINAL | SEALED |
     OVERRIDE | CASE | IMPLICIT | ABSOVERRIDE | LAZY
@@ -218,7 +223,7 @@ class Flags extends ModifierFlags {
     ACCESSOR | SUPERACCESSOR | PARAMACCESSOR | BRIDGE | STATIC | VBRIDGE | SPECIALIZED
 
   /** The two bridge flags */
-  final val BRIDGES = BRIDGE | VBRIDGE
+  final val BridgeFlags = BRIDGE | VBRIDGE
 
   /** When a symbol for a field is created, only these flags survive
    *  from Modifiers.  Others which may be applied at creation time are:
@@ -226,6 +231,13 @@ class Flags extends ModifierFlags {
    */
   final val FieldFlags: Long =
     MUTABLE | CASEACCESSOR | PARAMACCESSOR | STATIC | FINAL | PRESUPER | LAZY
+
+  /** Masks for getters and setters, where the flags are derived from those
+   *  on the field's modifiers.  Both getters and setters get the ACCESSOR flag.
+   *  Getters of immutable values also get STABLE.
+   */
+  final val GetterFlags = ~(PRESUPER | MUTABLE)
+  final val SetterFlags = ~(PRESUPER | MUTABLE | STABLE | CASEACCESSOR)
 
   /** When a symbol for a default getter is created, it inherits these
    *  flags from the method with the default.  Other flags applied at creation
@@ -239,7 +251,12 @@ class Flags extends ModifierFlags {
    *  SYNTHETIC.
    */
   final val ValueParameterFlags: Long = BYNAMEPARAM | IMPLICIT | DEFAULTPARAM
+  final val BeanPropertyFlags         = DEFERRED | OVERRIDE | STATIC
   final val VarianceFlags             = COVARIANT | CONTRAVARIANT
+
+  /** These appear to be flags which should be transferred from owner symbol
+   *  to a newly created constructor symbol.
+   */
   final val ConstrFlags: Long         = JAVA
 
   /** Module flags inherited by their module-class */
