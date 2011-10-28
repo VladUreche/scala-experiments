@@ -829,8 +829,8 @@ trait Types extends api.Types { self: SymbolTable =>
 
     /** A test whether a type contains any unification type variables. */
     def isGround: Boolean = this match {
-      case TypeVar(_, constr) => 
-        constr.instValid && constr.inst.isGround
+      case tv@TypeVar(_, _) =>
+        tv.untouchable || (tv.instValid && tv.constr.inst.isGround)
       case TypeRef(pre, sym, args) =>
         sym.isPackageClass || pre.isGround && (args forall (_.isGround))
       case SingleType(pre, sym) =>
@@ -2380,7 +2380,7 @@ A type's typeSymbol should never be inspected directly.
     def apply(origin: Type, constr: TypeConstraint) = new TypeVar(origin, constr, List(), List())
     // TODO why not initialise TypeConstraint with bounds of tparam?
     // @PP: I tried that, didn't work out so well for me.
-    def apply(tparam: Symbol) = new TypeVar(tparam.tpeHK, new TypeConstraint, List(), tparam.typeParams) 
+    def apply(tparam: Symbol, untouchable: Boolean = false) = new TypeVar(tparam.tpeHK, new TypeConstraint, List(), tparam.typeParams, untouchable)
     def apply(origin: Type, constr: TypeConstraint, args: List[Type], params: List[Symbol]) =
       new TypeVar(origin, constr, args, params)
   }
@@ -2396,7 +2396,8 @@ A type's typeSymbol should never be inspected directly.
     val origin: Type,
     val constr0: TypeConstraint,
     override val typeArgs: List[Type],
-    override val params: List[Symbol]
+    override val params: List[Symbol],
+    val untouchable: Boolean = false // by other typevars
   ) extends Type {
     private val numArgs = typeArgs.length
     // params are needed to keep track of variance (see mapOverArgs in SubstMap)
@@ -2568,30 +2569,33 @@ A type's typeSymbol should never be inspected directly.
       // would be pointless. In this case, each check we perform causes us to lose specificity: in
       // the end the best we'll do is the least specific type we tested against, since the typevar
       // does not see these checks as "probes" but as requirements to fulfill.
-      // TODO: the `suspended` flag can be used to poke around with leaving a trace
+      // TODO: can the `suspended` flag be used to poke around without leaving a trace?
       //
       // So the strategy used here is to test first the type, then the direct parents, and finally
       // to fall back on the individual base types. This warrants eventual re-examination.
 
-      // AM: I think we could use the `suspended` flag to avoid side-effecting during unification
-
-      if (suspended)              // constraint accumulation is disabled
-        checkSubtype(tp, origin)
-      else if (constr.instValid)  // type var is already set
-        checkSubtype(tp, constr.inst)
-      else isRelatable(tp) && {
-        // registerSkolemizationLevel checks for type skolems which cannot be understood at this level
-        registerSkolemizationLevel(tp)
-        unifySimple || unifyFull(tp) || (
-          // only look harder if our gaze is oriented toward Any
-          isLowerBound && (
-            (tp.parents exists unifyFull) || (
-              // @PP: Is it going to be faster to filter out the parents we just checked?
-              // That's what's done here but I'm not sure it matters.
-              tp.baseTypeSeq.toList.tail filterNot (tp.parents contains _) exists unifyFull
+      tp match {
+        case tv : TypeVar if untouchable && !tv.untouchable => // TODO: wouldn't it be nice if if's condition could be an Option (and Option[TypeVar], say), whose would become available in the then clause, so we wouldn't have to cast? (imagine the love child of if and match: if (tv@isYoungerTypeVar(tp)) tv.registerBound(...))
+          tv.registerBound(this, !isLowerBound, isNumericBound)
+        case _ if suspended => // constraint accumulation is disabled
+          checkSubtype(tp, origin)
+        case _ if instValid => // type var is already set
+          checkSubtype(tp, constr.inst)
+        case _ =>
+          isRelatable(tp) && {
+            // registerSkolemizationLevel checks for type skolems which cannot be understood at this level
+            registerSkolemizationLevel(tp)
+            unifySimple || unifyFull(tp) || (
+              // only look harder if our gaze is oriented toward Any
+              isLowerBound && (
+                (tp.parents exists unifyFull) || (
+                  // @PP: Is it going to be faster to filter out the parents we just checked?
+                  // That's what's done here but I'm not sure it matters.
+                  tp.baseTypeSeq.toList.tail filterNot (tp.parents contains _) exists unifyFull
+                )
+              )
             )
-          )
-        )
+          }
       }
     }
 
@@ -2601,15 +2605,22 @@ A type's typeSymbol should never be inspected directly.
         if(typeVarLHS) constr.inst =:= tp
         else           tp          =:= constr.inst
 
-      if (suspended) tp =:= origin
-      else if (constr.instValid) checkIsSameType(tp)
-      else isRelatable(tp) && {
-        registerSkolemizationLevel(tp)
-        val newInst = wildcardToTypeVarMap(tp)
-        if (constr.isWithinBounds(newInst)) {
-          setInst(tp)
-          true
-        } else false
+      tp match {
+        case tv : TypeVar if untouchable && !tv.untouchable =>
+          tv.registerTypeEquality(this, !typeVarLHS)
+        case _ if suspended => // constraint accumulation is disabled
+          tp =:= origin
+        case _ if instValid =>
+          checkIsSameType(tp)
+        case _ =>
+          isRelatable(tp) && {
+            registerSkolemizationLevel(tp)
+            val newInst = wildcardToTypeVarMap(tp)
+            if (constr.isWithinBounds(newInst)) {
+              setInst(tp)
+              true
+            } else false
+          }
       }
     }
 
@@ -2665,8 +2676,8 @@ A type's typeSymbol should never be inspected directly.
     private def levelString = if (settings.explaintypes.value) level else ""
     override def safeToString = constr.inst match {
       case null   => "<null " + origin + ">"
-      case NoType => "?" + levelString + origin + typeArgsString(this)
-      case x      => "" + x
+      case NoType => (if(untouchable) "!?" else "?") + levelString + origin + typeArgsString(this)
+      case x      => "[TV == " + x + "]"
     }
     override def kind = "TypeVar"
 
@@ -5481,8 +5492,9 @@ A type's typeSymbol should never be inspected directly.
     def stripType(tp: Type) = tp match {
       case ExistentialType(_, res) => 
         res
-      case TypeVar(_, constr) => 
-        if (constr.instValid) constr.inst
+      case tv@TypeVar(_, constr) =>
+        if (tv.instValid) constr.inst
+        else if (tv.untouchable) tv
         else abort("trying to do lub/glb of typevar "+tp)
       case t => t
     }
@@ -5518,7 +5530,10 @@ A type's typeSymbol should never be inspected directly.
       else if (isNumericSubType(t2, t1)) t2
       else NoType)
 
-  def isWeakSubType(tp1: Type, tp2: Type) = 
+  // TODO: this should not normalize eagerly, as it breaks type inference involving type aliases (to numeric types)
+  // (in isSubType we're careful only to normalize as a second attempt, so that something like this type checks:
+  // type Foo[T] = Long; def bar[T](x: Foo[T]): T = ???; bar(??? : Foo[String])): String)
+  def isWeakSubType(tp1: Type, tp2: Type) =
     tp1.deconst.normalize match {
       case TypeRef(_, sym1, _) if isNumericValueClass(sym1) =>
         tp2.deconst.normalize match {
