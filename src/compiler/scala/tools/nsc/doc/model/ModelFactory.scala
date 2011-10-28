@@ -745,7 +745,8 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   	// We shouldn't document:
   	// - common methods (in Any, AnyRef, Object) as they are automatically removed
   	// - constructors
-    localShouldDocument(aSym) && (!aSym.isConstructor) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) 
+    localShouldDocument(aSym) && (!aSym.isConstructor) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) && 
+    (!aSym.isProtected) && (!aSym.isPrivate) 
   }
   
   def membersByImplicitConversions(sym: Symbol, inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {
@@ -754,22 +755,9 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     else {
       println("\n\n" + sym.nameString + "\n" + "=" * sym.nameString.length())
       
-      val tree: Tree = EmptyTree
-      //val newtpe = sym.tpe.subst(sym.typeParams, sym.typeParams map (TypeVar.apply(_))) //(x => WildcardType)) 
-      //val expType: Type = global.definitions.functionType(List(newtpe.normalize), AnyClass.tpe)
-      val expType: Type = global.definitions.functionType(List(sym.tpe.normalize), AnyClass.tpe)
-      val isView: Boolean = true
-		
-      val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)
-      //context.undetparams = sym.typeParams ::: context.undetparams
-      //context.outer.undetparams = sym.typeParams ::: context.outer.undetparams
-      //println("type: " + sym.tpe + "  " + sym.tpe.getClass())
-      //println("info: " + sym.info + "  " + sym.info.getClass())
-      println("context.undetparams: " + context.undetparamsString)
-      val implicitSearch = new global.analyzer.ImplicitSearch(tree, expType, isView, context)
-      println()
+      val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)      
       
-      implicitSearch.allImplicits flatMap { case result: global.analyzer.SearchResult => getMembersSymbols(result, inTpl) }
+      global.analyzer.allViewsFrom(sym.tpe, context, sym.typeParams) flatMap { case (result, _) => getMembersSymbols(result, inTpl) }
     }
   }
   
@@ -813,6 +801,47 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 	    implicitMembersAsSeenFrom.map(sym => (sym, implicitConversion))
     } else
     	Nil
-  }  
+  }
+
+  
+//  /** TODO: Vlad, flesh this method out and move it to ScalaDoc
+//    example usage:
+//    val fromTp = ...
+//    val freeTPars = ... (occuring in fromTp)
+//    allViewsFrom(fromTp, context, freeTPars) foreach { case (res, constrs) =>
+//      typeView(fromTp, context, res, freeTPars, constrs)
+//    }
+//  */
+//  def typeView(tp: Type, context: Context, res: SearchResult, tpars: List[Symbol], constrs: List[TypeConstraint]) = {
+//    val coercion = res.tree
+//    val typed: Tree = if (coercion != EmptyTree) {
+//      // println("coercion from " + tp + " = " + coercion + ":" + coercion.tpe)
+//      val viewApply = new ApplyImplicitView(coercion, List(Ident("<argument>") setType coercion.tpe.paramTypes.head))
+//      // TODO: this seems to search for implicits transitively required by the view, despite the context.makeImplicit
+//      // you'll see the required type parameters intersected together in the println("involved tpars ... below
+//      newTyper(context.makeImplicit(context.reportAmbiguousErrors)).silent(_.typed(viewApply, EXPRmode, WildcardType), false) match {
+//          case ex: Throwable =>
+//            println("typing coercion failed "+ ex)
+//            coercion
+//          case t: Tree => t
+//        }
+//    } else EmptyTree
+//
+//    def simplifyConstraint(constr: TypeConstraint) =
+//      try new TypeConstraint(List(lub(constr.loBounds)), List(glb(constr.hiBounds))) // BoundedWildcardType(TypeBounds(lub(constr.loBounds), glb(constr.hiBounds)))
+//      catch { case x: Throwable => new TypeConstraint(constr.loBounds.distinct, constr.hiBounds.distinct) } // does this actually ever happen? (probably when type vars occur in the bounds)
+//
+//    // the type vars need to be propagated until we ask for the members, then you can replace them by some simplified representation
+//    // in principle, we should solve the set of type variables, but this is unlikely to work since we can't really know any of them concretely
+//    // for now, just simplify them, and if their upper bounds =:= lower bounds, replace by that type,
+//    // else, if the lub and the glb could be computed, use an existential with the given lower and upper bound
+//    // if all that fails, you'll need some textual representation of the TypeConstraint
+//    val toTp = typed.tpe.finalResultType
+//    println("conversion "+ typed.symbol +" from "+ tp +" to "+ typed.tpe.finalResultType)
+//    if(tpars nonEmpty) println("involved tpars and their constraints: "+ (tpars zip (constrs map simplifyConstraint)))
+//    println("members pimped on: ")
+//    toTp.nonPrivateMembers foreach (sym => println("  - "+ sym.decodedName +" : "+ (toTp memberInfo sym)))
+//  }
+  
 }
 
