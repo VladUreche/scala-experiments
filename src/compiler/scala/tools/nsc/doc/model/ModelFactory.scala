@@ -743,10 +743,12 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   
   def implicitShouldDocument(aSym: Symbol): Boolean = {
   	// We shouldn't document:
-  	// - common methods (in Any, AnyRef, Object) as they are automatically removed
   	// - constructors
+		// - common methods (in Any, AnyRef, Object) as they are automatically removed
+  	// - private and protected members (not accessible following an implicit conversion)
+  	// - members starting with _ (usually reserved for internal stuff)
     localShouldDocument(aSym) && (!aSym.isConstructor) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) && 
-    (!aSym.isProtected) && (!aSym.isPrivate) 
+    (!aSym.isProtected) && (!aSym.isPrivate) && (!aSym.name.toString.startsWith("_"))
   }
   
   def membersByImplicitConversions(sym: Symbol, inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {
@@ -755,93 +757,83 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     else {
       println("\n\n" + sym.nameString + "\n" + "=" * sym.nameString.length())
       
-      val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)      
+      val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)            
+      val result = global.analyzer.allViewsFrom(sym.tpe, context, sym.typeParams)
       
-      global.analyzer.allViewsFrom(sym.tpe, context, sym.typeParams) flatMap { case (result, _) => getMembersSymbols(result, inTpl) }
+      result flatMap { case (result, constr) => getMembersSymbols(sym.tpe, context, sym.typeParams, result, constr, inTpl) }
     }
   }
   
-  def getMembersSymbols(result: global.analyzer.SearchResult, inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {    
-  	var implConstraints: List[Block] = Nil
-		println(" * " + result + ": ")
-    
-    def getResultType(ty: Type): Option[Type] = ty match {
+  def getMembersSymbols(tp: Type, 
+  										  context: global.analyzer.Context, 
+  										  tpars: List[Symbol], 
+  										  res: global.analyzer.SearchResult, 
+  										  constrs: List[TypeConstraint], 
+  										  inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {
+
+  	// The implicit constraints: we gather constraints about the type. The constraints can be of several types:
+  	//  - the existence of implicit parameters of certain types (see removeImplicitParameters)
+    //  - type bounds and type substitutions
+  	var constraints: List[Block] = Nil  	
+
+  	// This function removes implicit values from the view and adds them as constraints
+  	def removeImplicitParameters(ty: Type): Type = ty match {
+  		case MethodType(params, resultType) if (params.filter(_.isImplicit).length == 0) =>
+  			MethodType(params, removeImplicitParameters(resultType))
 		  case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
-		    implConstraints = implConstraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(param.tpe.toString))::Nil)))
-		    getResultType(resultType)
-		  case resultType: TypeRef =>
-		    Some(resultType)
-		  case _ =>
-		    None
-  	}
+		    constraints = constraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(param.tpe.toString))::Nil)))
+		    removeImplicitParameters(resultType)
+		  case other =>
+		    other // It might be a class, a method or anything else it wants to be, we just strip all implicit params
+  	}  	
+  	
+  	// obtain the result after applying the view
+    val typed: Tree = if (res.tree != EmptyTree) {
+    	// here we need to remove all implicits and add them as constraints
+    	val coercion = res.tree.setType(removeImplicitParameters(res.tree.tpe))
 
-    val targetType = getResultType(result.tree.tpe.resultType)
+    	// and get the view applied to an argument
+      val viewApply = new ApplyImplicitView(coercion, List(Ident("<argument>") setType coercion.tpe.paramTypes.head))      
+      global.analyzer.newTyper(context.makeImplicit(context.reportAmbiguousErrors)).silent(_.typed(viewApply, global.analyzer.EXPRmode, WildcardType), false) match {
+          case ex: Throwable =>
+            println("typing coercion failed "+ ex)
+            coercion
+          case t: Tree => t
+        }
+    } else EmptyTree
+
+    def simplifyConstraint(constr: TypeConstraint) =
+      try new TypeConstraint(List(lub(constr.loBounds)), List(glb(constr.hiBounds))) // BoundedWildcardType(TypeBounds(lub(constr.loBounds), glb(constr.hiBounds)))
+      catch { case x: Throwable => new TypeConstraint(constr.loBounds.distinct, constr.hiBounds.distinct) } // does this actually ever happen? (probably when type vars occur in the bounds)
+
+    // the type vars need to be propagated until we ask for the members, then you can replace them by some simplified representation
+    // in principle, we should solve the set of type variables, but this is unlikely to work since we can't really know any of them concretely
+    // for now, just simplify them, and if their upper bounds =:= lower bounds, replace by that type,
+    // else, if the lub and the glb could be computed, use an existential with the given lower and upper bound
+    // if all that fails, you'll need some textual representation of the TypeConstraint
+    val toTp = typed.tpe.finalResultType
+    println("conversion "+ typed.symbol +" from "+ tp +" to "+ typed.tpe.finalResultType)
     
-    if (targetType.isDefined) {
+    // TODO: Transform these into constraints
+    if(tpars nonEmpty) println("involved tpars and their constraints: "+ (tpars zip (constrs map simplifyConstraint)))
+    // TODO: Transform res.subst into constraints
+    // ...
+    
+    val implicitMembers = toTp.nonPrivateMembers. 
+    											  filter(implicitShouldDocument(_)).
+    											  map { symbol => symbol.cloneSymbol.setInfo(toTp memberInfo symbol) } 
+    
+    implicitMembers foreach (sym => println("  - "+ sym.decodedName +" : " + sym.info))
 
-    	val implicitResultType = targetType.get		     	    
-	    val implicitMembers = implicitResultType.members.filter((s => implicitShouldDocument(s)))
-	    val implicitMembersAsSeenFrom = implicitMembers.map 
-	    	{ symbol => symbol.cloneSymbol.setInfo(symbol.info.asSeenFrom(implicitResultType, symbol.owner)) }      
-
-	    val implicitMemberStrings = implicitMembersAsSeenFrom.map(x => x.toString + ": " + x.tpe.toString)
-
-      println("     - final type:       " + result.tree.tpe.resultType)
-      println("     - substitutions:    " + result.subst)
-      println("     - implicit members: " + implicitMemberStrings.mkString("\n         - ","\n         - ", "\n"))
-	
-	    // TODO: translate TreeTypeSubstituters to intelligible strings (with types?)
-      	    
-      val implicitConversion = new ImplicitConversion{ 
-											           val target = makeType(implicitResultType, inTpl) 
-											           val convertor = Body(List(Code(result.tree.toString)))
-											           val constraints = Body(List(UnorderedList(implConstraints)))
-											         }
-    	
-	    implicitMembersAsSeenFrom.map(sym => (sym, implicitConversion))
-    } else
-    	Nil
+    // Create the implicit conversion object
+    val _constraints = constraints
+    val implicitConversion = new ImplicitConversion{ 
+										           val target = makeType(res.tree.tpe, inTpl) 
+										           val convertor = Body(List(Code(res.tree.toString)))
+										           val constraints = Body(List(UnorderedList(_constraints)))
+										         }
+    
+    implicitMembers.map((_, implicitConversion))
   }
-
-  
-//  /** TODO: Vlad, flesh this method out and move it to ScalaDoc
-//    example usage:
-//    val fromTp = ...
-//    val freeTPars = ... (occuring in fromTp)
-//    allViewsFrom(fromTp, context, freeTPars) foreach { case (res, constrs) =>
-//      typeView(fromTp, context, res, freeTPars, constrs)
-//    }
-//  */
-//  def typeView(tp: Type, context: Context, res: SearchResult, tpars: List[Symbol], constrs: List[TypeConstraint]) = {
-//    val coercion = res.tree
-//    val typed: Tree = if (coercion != EmptyTree) {
-//      // println("coercion from " + tp + " = " + coercion + ":" + coercion.tpe)
-//      val viewApply = new ApplyImplicitView(coercion, List(Ident("<argument>") setType coercion.tpe.paramTypes.head))
-//      // TODO: this seems to search for implicits transitively required by the view, despite the context.makeImplicit
-//      // you'll see the required type parameters intersected together in the println("involved tpars ... below
-//      newTyper(context.makeImplicit(context.reportAmbiguousErrors)).silent(_.typed(viewApply, EXPRmode, WildcardType), false) match {
-//          case ex: Throwable =>
-//            println("typing coercion failed "+ ex)
-//            coercion
-//          case t: Tree => t
-//        }
-//    } else EmptyTree
-//
-//    def simplifyConstraint(constr: TypeConstraint) =
-//      try new TypeConstraint(List(lub(constr.loBounds)), List(glb(constr.hiBounds))) // BoundedWildcardType(TypeBounds(lub(constr.loBounds), glb(constr.hiBounds)))
-//      catch { case x: Throwable => new TypeConstraint(constr.loBounds.distinct, constr.hiBounds.distinct) } // does this actually ever happen? (probably when type vars occur in the bounds)
-//
-//    // the type vars need to be propagated until we ask for the members, then you can replace them by some simplified representation
-//    // in principle, we should solve the set of type variables, but this is unlikely to work since we can't really know any of them concretely
-//    // for now, just simplify them, and if their upper bounds =:= lower bounds, replace by that type,
-//    // else, if the lub and the glb could be computed, use an existential with the given lower and upper bound
-//    // if all that fails, you'll need some textual representation of the TypeConstraint
-//    val toTp = typed.tpe.finalResultType
-//    println("conversion "+ typed.symbol +" from "+ tp +" to "+ typed.tpe.finalResultType)
-//    if(tpars nonEmpty) println("involved tpars and their constraints: "+ (tpars zip (constrs map simplifyConstraint)))
-//    println("members pimped on: ")
-//    toTp.nonPrivateMembers foreach (sym => println("  - "+ sym.decodedName +" : "+ (toTp memberInfo sym)))
-//  }
-  
 }
 
