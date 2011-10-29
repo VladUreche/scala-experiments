@@ -1,15 +1,17 @@
 package test.implicits
 
-
+class Foo[T]
 
 /** Class A 
  *  - tests the complete type inference 
  *  - the following inherited methods should appear:
  * {{{
- * def inheritedByImplicitConversionToPimpedA: T
- * def inheritedByImplicitConversionToNumericA: T
- * def inheritedByImplicitConversionToIntA: Int
- * def inheritedByImplicitConversionToGtColonDoubleA: Double
+ * def inheritedByImplicitConversionToPimpedA: T             // no constraints
+ * def inheritedByImplicitConversionToNumericA: T            // with a constraint that there is x: Numeric[T] implicit in scope
+ * def inheritedByImplicitConversionToIntA: Int              // with a constraint that T = Int
+ * def inheritedByImplicitConversionToGtColonDoubleA: Double // with a constraint that T <: Double
+ * def inheritedByImplicitConversionToPimpedA: S             // with a constraint that T = Foo[S]
+ * def inheritedByImplicitConversionToPimpedA: Foo[T]        // no constraints
  * }}}
  */
 class A[T]
@@ -19,6 +21,8 @@ object A {
   implicit def pimpA1[T: Numeric](a: A[T]) = new NumericA[T](a)
   implicit def pimpA2(a: A[Int]) = new IntA(a)
   implicit def pimpA3(a: A[T] forSome { type T <: Double }) = new GtColonDoubleA(a)
+  implicit def pimpA4[S](a: A[Foo[S]]): PimpedA[S] = sys.error("not implemented")
+  implicit def pimpA5[Z](a: A[Z]): PimpedA[Foo[Z]] = sys.error("not implemented")
 }
 
 
@@ -26,9 +30,10 @@ object A {
  *  - tests the existential type solving 
  *  - the following inherited methods should appear:
  * {{{
- * def inheritedByImplicitConversionToPimpedA: Double
- * def inheritedByImplicitConversionToNumericA: Double
- * def inheritedByImplicitConversionToGtColonDoubleA: Double
+ * def inheritedByImplicitConversionToPimpedA: Double        // no constraints
+ * def inheritedByImplicitConversionToNumericA: Double       // no constraints
+ * def inheritedByImplicitConversionToGtColonDoubleA: Double // no constraints
+ * def inheritedByImplicitConversionToPimpedA: Foo[T]        // no constraints
  * }}}
  */
 class B extends A[Double]
@@ -39,9 +44,10 @@ object B extends A
  *  - tests asSeenFrom
  *  - the following inherited methods should appear:
  * {{{
- * def inheritedByImplicitConversionToPimpedA: Int
- * def inheritedByImplicitConversionToNumericA: Int
- * def inheritedByImplicitConversionToIntA: Int
+ * def inheritedByImplicitConversionToPimpedA: Int           // no constraints
+ * def inheritedByImplicitConversionToNumericA: Int          // no constraints
+ * def inheritedByImplicitConversionToIntA: Int              // no constraints
+ * def inheritedByImplicitConversionToPimpedA: Foo[T]        // no constraints
  * }}}
  */
 class C extends A[Int]
