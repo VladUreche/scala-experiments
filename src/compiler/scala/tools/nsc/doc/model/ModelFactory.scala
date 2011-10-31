@@ -781,11 +781,21 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   		case MethodType(params, resultType) if (params.filter(_.isImplicit).length == 0) =>
   			MethodType(params, removeImplicitParameters(resultType))
 		  case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
-		    constraints = constraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(param.tpe.toString))::Nil)))
+		    constraints = constraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(typeVarToOrigin(param.tpe).toString))::Nil)))
 		    removeImplicitParameters(resultType)
 		  case other =>
 		    other // It might be a class, a method or anything else it wants to be, we just strip all implicit params
   	}  	
+
+    // we don't want typeVars, we want our original type params back
+	  object typeVarToOrigin extends TypeMap {
+	    def apply(tp: Type): Type = mapOver(tp) match {	      	
+        case tv: TypeVar => 
+        	tv.origin //appliedType(tv.origin.typeConstructor, tv.typeArgs map this)
+        case other =>
+          other	      
+	    }
+	  }
   	
   	// obtain the result after applying the view
     val typed: Tree = if (res.tree != EmptyTree) {
@@ -811,8 +821,8 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     // for now, just simplify them, and if their upper bounds =:= lower bounds, replace by that type,
     // else, if the lub and the glb could be computed, use an existential with the given lower and upper bound
     // if all that fails, you'll need some textual representation of the TypeConstraint
-    val toTp = typed.tpe.finalResultType
-    println("conversion "+ typed.symbol +" from "+ tp +" to "+ typed.tpe.finalResultType)
+    val toTp = typeVarToOrigin(typed.tpe.finalResultType)
+    println("conversion "+ typed.symbol +" from "+ tp +" to "+ toTp)
     
     // TODO: Transform these into constraints
     if(tpars nonEmpty) println("involved tpars and their constraints: "+ (tpars zip (constrs map simplifyConstraint)))
@@ -824,7 +834,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     											  map { symbol => symbol.cloneSymbol.setInfo(toTp memberInfo symbol) } 
     
     implicitMembers foreach (sym => println("  - "+ sym.decodedName +" : " + sym.info))
-
+    
     // Create the implicit conversion object
     val _constraints = constraints
     val implicitConversion = new ImplicitConversion{ 
