@@ -790,13 +790,28 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     // we don't want typeVars, we want our original type params back
 	  object typeVarToOrigin extends TypeMap {
 	    def apply(tp: Type): Type = mapOver(tp) match {	      	
-        case tv: TypeVar => 
-        	tv.origin //appliedType(tv.origin.typeConstructor, tv.typeArgs map this)
+        case tv: TypeVar =>
+        	if (tv.constr.inst.typeSymbol == NothingClass)
+        		WildcardType
+      		else
+      			tv.origin //appliedType(tv.origin.typeConstructor, tv.typeArgs map this)
         case other =>
-          other	      
+        	if (other.typeSymbol == NothingClass)
+        		WildcardType
+      		else
+      			other	      
 	    }
 	  }
-  	
+
+	  object wildcardToNothing extends TypeMap {
+	    def apply(tp: Type): Type = mapOver(tp) match {	      	
+        case WildcardType =>
+        	NothingClass.tpe
+        case other =>
+    			other	      
+	    }
+	  }
+
   	// obtain the result after applying the view
     val typed: Tree = if (res.tree != EmptyTree) {
     	// here we need to remove all implicits and add them as constraints
@@ -812,9 +827,15 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
         }
     } else EmptyTree
 
-    def simplifyConstraint(constr: TypeConstraint) =
-      try new TypeConstraint(List(lub(constr.loBounds)), List(glb(constr.hiBounds))) // BoundedWildcardType(TypeBounds(lub(constr.loBounds), glb(constr.hiBounds)))
-      catch { case x: Throwable => new TypeConstraint(constr.loBounds.distinct, constr.hiBounds.distinct) } // does this actually ever happen? (probably when type vars occur in the bounds)
+    def uniteConstraints(constr: TypeConstraint): TypeConstraint =
+      try {
+      	new TypeConstraint(List(wildcardToNothing(lub(constr.loBounds  map typeVarToOrigin))), 
+      									   List(wildcardToNothing(glb(constr.hiBounds  map typeVarToOrigin)))) 
+      	// BoundedWildcardType(TypeBounds(lub(constr.loBounds), glb(constr.hiBounds)))
+      } catch { 
+      	// does this actually ever happen? (probably when type vars occur in the bounds)	
+      	case x: Throwable => new TypeConstraint(constr.loBounds.distinct, constr.hiBounds.distinct) 
+      } 
 
     // the type vars need to be propagated until we ask for the members, then you can replace them by some simplified representation
     // in principle, we should solve the set of type variables, but this is unlikely to work since we can't really know any of them concretely
@@ -825,9 +846,31 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     println("conversion "+ typed.symbol +" from "+ tp +" to "+ toTp)
     
     // TODO: Transform these into constraints
-    if(tpars nonEmpty) println("involved tpars and their constraints: "+ (tpars zip (constrs map simplifyConstraint)))
+    val boundConstraints = (tpars zip (constrs map uniteConstraints)) flatMap { 
+    	case (tp, constr) => (tp, constr.loBounds, constr.hiBounds, constr) match {
+	    	case (tp, List(lb), List(ub), _) if (lb == ub) =>
+	    		List(Paragraph(Chain(Text("Equality ")::Monospace(Text(tp + " := " + lb))::Nil)))
+	    	case (tp, List(lb), List(ub), _) if ((lb == NothingClass.tpe) && (ub == AnyClass.tpe)) =>
+	    		Nil
+	    	case (tp, List(lb), List(ub), _) if (ub == AnyClass.tpe) =>
+	    		List(Paragraph(Chain(Text("Lower bound ")::Monospace(Text(tp + " :> " + lb))::Nil)))
+	    	case (tp, List(lb), List(ub), _) if (lb == NothingClass.tpe) =>
+	    		List(Paragraph(Chain(Text("Upper bound ")::Monospace(Text(tp + " :< " + ub))::Nil)))
+	    	case (tp, List(lb), List(ub), _) =>
+	    		List(Paragraph(Chain(Text("Bounded ")::Monospace(Text(tp + " :> " + lb + " :< " + ub))::Nil)))
+	    	case (tp, _, _, constr) =>
+	    		List(Paragraph(Chain(Text("Other ")::Monospace(Text(tp + " " + constr))::Nil)))
+    	}
+  	}
+    
     // TODO: Transform res.subst into constraints
-    // ...
+    val substConstraints = (res.subst.from zip res.subst.to) flatMap { case (from, to) =>
+    	List(Paragraph(Chain(Text("Substitute type of ")::Monospace(Text(from.toString))::Text(" to ")::Monospace(Text(to.toString))::Nil)))
+    	
+    }
+    
+    constraints = constraints ::: boundConstraints ::: substConstraints
+    constraints foreach println
     
     val implicitMembers = toTp.nonPrivateMembers. 
     											  filter(implicitShouldDocument(_)).
