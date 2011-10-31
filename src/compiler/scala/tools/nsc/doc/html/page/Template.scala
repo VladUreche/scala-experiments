@@ -269,10 +269,18 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
     <p class="comment cmt">{ inlineToHtml(mbr.comment.get.short) }</p>
 
   def memberToCommentBodyHtml(mbr: MemberEntity, isSelf: Boolean, isReduced: Boolean = false): NodeSeq = {
-    val memberComment =
+    
+    val implicitConversionInfo: Seq[scala.xml.Node] = mbr.implicitConversion match {
+    	case Some(conv) =>
+    		<div class="comment cmt">{ bodyToHtml(conv.getBody) }</div>
+    	case _ =>
+    		NodeSeq.Empty
+    }
+  	
+  	val memberComment =
       if (mbr.comment.isEmpty) NodeSeq.Empty 
       else <div class="comment cmt">{ commentToHtml(mbr.comment) }</div>
-
+    
     val paramComments = { 
       val prs: List[ParameterEntity] = mbr match {
         case cls: Class => cls.typeParams ::: cls.valueParams.flatten
@@ -389,7 +397,7 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
           <dt>Migration</dt>
           <dd class="cmt">{ bodyToHtml(mbr.migration.get) }</dd>
       }
-
+    
     val mainComment: Seq[scala.xml.Node] = mbr.comment match {
       case Some(comment) if (! isReduced) =>
         val example = 
@@ -487,7 +495,7 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
       case _ => NodeSeq.Empty
     }
 
-    memberComment ++ paramComments ++ attributesBlock ++ linearization ++ subclasses
+    implicitConversionInfo ++ memberComment ++ paramComments ++ attributesBlock ++ linearization ++ subclasses
   }
 
   def kindToString(mbr: MemberEntity): String = {
@@ -547,7 +555,7 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
             val span = if (mbr.deprecation.isDefined)
               <span class={"name deprecated"} title={"Deprecated: "+bodyToStr(mbr.deprecation.get)}>{ value }</span>
             else
-              <span class={"name"}>{ value }</span>
+              <span class={if (mbr.implicitConversion.isDefined) "nameImplicit" else "name"}>{ value }</span>
             val encoded = scala.reflect.NameTransformer.encode(value)
             if (encoded != value) {
               span % new UnprefixedAttribute("title",
@@ -633,6 +641,7 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
         }}
       </span>
       </xml:group>
+        
     mbr match {
       case dte: DocTemplateEntity if !isSelf =>
         <h4 class="signature">{ inside(hasLinks = false, nameLink = relativeLinkTo(dte)) }</h4>
@@ -641,7 +650,6 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
       case _ =>
         <h4 class="signature">{ inside(hasLinks = true) }</h4>
     }
-
   }
 
   /** */

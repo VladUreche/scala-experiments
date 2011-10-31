@@ -111,7 +111,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     def isDocTemplate = false
   }
 
-  abstract class MemberImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends EntityImpl(sym, inTpl) with MemberEntity {
+  abstract class MemberImpl(sym: Symbol, implConv: ImplicitConversion = null, inTpl: => DocTemplateImpl) extends EntityImpl(sym, inTpl) with MemberEntity {
     dbg("MemberImpl(" + sym + ", inTpl) - started")
     lazy val comment =
       if (inTpl == null) None else thisFactory.comment(sym, inTpl)
@@ -189,13 +189,14 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
       ((!sym.isTrait && ((sym hasFlag Flags.ABSTRACT) || (sym hasFlag Flags.DEFERRED))) || 
       sym.isAbstractClass || sym.isAbstractType) && !sym.isSynthetic
     def isTemplate = false
+    def implicitConversion = if (implConv ne null) Some(implConv) else None
     dbg("MemberImpl(" + sym + ", inTpl) - finished")
   }
 
    /** The instantiation of `TemplateImpl` triggers the creation of the following entities:
     *  All ancestors of the template and all non-package members.
     */
-  abstract class DocTemplateImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends MemberImpl(sym, inTpl) with TemplateImpl with HigherKindedImpl with DocTemplateEntity {
+  abstract class DocTemplateImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends MemberImpl(sym, null, inTpl) with TemplateImpl with HigherKindedImpl with DocTemplateEntity {
     //if (inTpl != null) println("mbr " + sym + " in " + (inTpl.toRoot map (_.sym)).mkString(" > "))
     dbg("DocTemplateImpl(" + sym + ", inTpl) - started")
     
@@ -297,18 +298,16 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 
   abstract class RootPackageImpl(sym: Symbol) extends PackageImpl(sym, null) with RootPackageEntity
   
-  abstract class NonTemplateMemberImpl(sym: Symbol, implConv: => ImplicitConversion, inTpl: => DocTemplateImpl) extends MemberImpl(sym, inTpl) with NonTemplateMemberEntity {
+  abstract class NonTemplateMemberImpl(sym: Symbol, implConv: ImplicitConversion, inTpl: => DocTemplateImpl) extends MemberImpl(sym, implConv, inTpl) with NonTemplateMemberEntity {
     dbg("NonTemplateMemberImpl(" + sym + ", inTpl, implConv) - started")
     override def qualifiedName = optimize(inTemplate.qualifiedName + "#" + name)
     lazy val definitionName = optimize(inDefinitionTemplates.head.qualifiedName + "#" + name)
     def isUseCase = sym.isSynthetic
     def isBridge = sym.isBridge
-    def byImplicitConversion = (implConv ne null)
-    def implicitConversion = if (implConv ne null) Some(implConv) else None
     dbg("NonTemplateMemberImpl(" + sym + ", inTpl, implConv) - finished")
   }
   
-  abstract class NonTemplateParamMemberImpl(sym: Symbol, inTpl: => DocTemplateImpl) extends NonTemplateMemberImpl(sym, null, inTpl) {
+  abstract class NonTemplateParamMemberImpl(sym: Symbol, implConv: ImplicitConversion, inTpl: => DocTemplateImpl) extends NonTemplateMemberImpl(sym, implConv, inTpl) {
     dbg("NonTemplateParameterMemberImpl(" + sym + ", inTpl) - started")
     def valueParams =
       sym.paramss map { ps => (ps.zipWithIndex) map { case (p, i) =>
@@ -495,7 +494,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   }
 
   /** */
-  def makeMember(aSym: Symbol, implConv: => ImplicitConversion, inTpl: => DocTemplateImpl): List[MemberImpl] = {
+  def makeMember(aSym: Symbol, implConv: ImplicitConversion, inTpl: => DocTemplateImpl): List[MemberImpl] = {
     dbg("makeMember(" + aSym + ", inTpl)")      	
 
     def makeMember0(bSym: Symbol): Option[MemberImpl] = {
@@ -521,12 +520,12 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
           }
           else bSym
         }
-        Some(new NonTemplateParamMemberImpl(cSym, inTpl) with HigherKindedImpl with Def {
+        Some(new NonTemplateParamMemberImpl(cSym, implConv, inTpl) with HigherKindedImpl with Def {
           override def isDef = true
         })
       }
       else if (bSym.isConstructor)
-        Some(new NonTemplateParamMemberImpl(bSym, inTpl) with Constructor {
+        Some(new NonTemplateParamMemberImpl(bSym, implConv, inTpl) with Constructor {
           override def isConstructor = true
           def isPrimary = sym.isPrimaryConstructor
         })
@@ -781,7 +780,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   		case MethodType(params, resultType) if (params.filter(_.isImplicit).length == 0) =>
   			MethodType(params, removeImplicitParameters(resultType))
 		  case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
-		    constraints = constraints ::: params.map(param => Paragraph(Chain(Text("There must exist ")::Monospace(Text(typeVarToOrigin(param.tpe).toString))::Nil)))
+		    constraints = constraints ::: params.map(param => Paragraph(Chain(Text("An implicit value of type ")::Monospace(Text(typeVarToOrigin(param.tpe).toString))::Text(" is in scope.")::Nil)))
 		    removeImplicitParameters(resultType)
 		  case other =>
 		    other // It might be a class, a method or anything else it wants to be, we just strip all implicit params
@@ -845,25 +844,40 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     val toTp = typeVarToOrigin(typed.tpe.finalResultType)
     println("conversion "+ typed.symbol +" from "+ tp +" to "+ toTp)
     
-    // TODO: Transform these into constraints
-    val boundConstraints = (tpars zip (constrs map uniteConstraints)) flatMap { 
-    	case (tp, constr) => (tp, constr.loBounds, constr.hiBounds, constr) match {
-	    	case (tp, List(lb), List(ub), _) if (lb == ub) =>
-	    		List(Paragraph(Chain(Text("Equality ")::Monospace(Text(tp + " := " + lb))::Nil)))
-	    	case (tp, List(lb), List(ub), _) if ((lb == NothingClass.tpe) && (ub == AnyClass.tpe)) =>
-	    		Nil
-	    	case (tp, List(lb), List(ub), _) if (ub == AnyClass.tpe) =>
-	    		List(Paragraph(Chain(Text("Lower bound ")::Monospace(Text(tp + " :> " + lb))::Nil)))
-	    	case (tp, List(lb), List(ub), _) if (lb == NothingClass.tpe) =>
-	    		List(Paragraph(Chain(Text("Upper bound ")::Monospace(Text(tp + " :< " + ub))::Nil)))
-	    	case (tp, List(lb), List(ub), _) =>
-	    		List(Paragraph(Chain(Text("Bounded ")::Monospace(Text(tp + " :> " + lb + " :< " + ub))::Nil)))
-	    	case (tp, _, _, constr) =>
-	    		List(Paragraph(Chain(Text("Other ")::Monospace(Text(tp + " " + constr))::Nil)))
+    // Transform bound constraints into scaladoc constraints
+    val boundConstraints = (tpars zip (constrs map uniteConstraints)) flatMap {
+    	case (tp, constr) => {
+
+    		// Pretty name for the type 
+    		val tpString: String = tp match {
+    			case ts: TypeSymbol => ts.name.toString
+    			case _ => tp.toString
+    		}
+
+    		(constr.loBounds, constr.hiBounds) match {
+    			// Most generic bounds
+    			case (List(lb), List(ub)) if ((lb == NothingClass.tpe) && (ub == AnyClass.tpe)) =>
+		    		Nil
+		      // Same bound on both sides => equality
+		    	case (List(lb), List(ub)) if (lb == ub) =>		    		
+		    		List(Paragraph(Chain(Text(tpString + " is equal to " + lb + ": ")::Monospace(Text(tpString + " =: " + lb))::Nil)))
+		    	// Only lower bound
+		    	case (List(lb), List(ub)) if (ub == AnyClass.tpe) =>
+		    		List(Paragraph(Chain(Text(tpString + " is lower bounded by " + lb + ": ")::Monospace(Text(tpString + " >: " + lb))::Nil)))
+		    	// Only upper bound
+		    	case (List(lb), List(ub)) if (lb == NothingClass.tpe) =>
+		    		List(Paragraph(Chain(Text(tpString + " is upper bounded by " + ub + ": ")::Monospace(Text(tpString + " <: " + ub))::Nil)))
+		    	// Single bounds, not obvious
+		    	case (List(lb), List(ub)) =>
+		    		List(Paragraph(Chain(Text(tpString + " is bounded by " + lb + " and " + ub + ": ")::Monospace(Text(tpString + " >: " + lb + " <: " + ub))::Nil)))
+		    	// Multiple bounds - the complex case, shouldn't occur in practice
+		    	case _ =>
+		    		List(Paragraph(Chain(Text("Complex constraint: ")::Monospace(Text(tpString + " " + constr))::Nil)))
+    		}
     	}
   	}
     
-    // TODO: Transform res.subst into constraints
+    // Transform res.subst substitutions into scaladoc constraints
     val substConstraints = (res.subst.from zip res.subst.to) flatMap { case (from, to) =>
     	List(Paragraph(Chain(Text("Substitute type of ")::Monospace(Text(from.toString))::Text(" to ")::Monospace(Text(to.toString))::Nil)))
     	
@@ -881,9 +895,18 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     // Create the implicit conversion object
     val _constraints = constraints
     val implicitConversion = new ImplicitConversion{ 
-										           val target = makeType(res.tree.tpe, inTpl) 
+										           val target = makeType(toTp, inTpl) 
 										           val convertor = Body(List(Code(res.tree.toString)))
 										           val constraints = Body(List(UnorderedList(_constraints)))
+										           val getBody = {
+										          	 val header = Paragraph(Bold(Chain(Text("Member inherited by implicit conversion to ")::Monospace(Text(target.toString()))::Text(" by ")::Monospace(Text(res.tree.symbol.toString))::Text(" in ")::Monospace(Text(res.tree.symbol.owner.toString))::Text(".")::Nil)))
+										          	 val constraints: List[Block] = _constraints.length match {
+										          		 case 0 => Nil
+										          		 case 1 => List(Paragraph(Text("The implicit conversion will take place only if: ")), UnorderedList(_constraints.head :: Nil))
+										          		 case 2 => List(Paragraph(Text("The implicit conversion will take place only if all the constraints are satisfied:")), UnorderedList(_constraints)) 
+										          	 }
+										          	 Body(header :: constraints ::: HorizontalRule() :: Nil)
+										           }
 										         }
     
     implicitMembers.map((_, implicitConversion))

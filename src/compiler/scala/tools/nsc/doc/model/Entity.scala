@@ -166,7 +166,10 @@ trait MemberEntity extends Entity {
 
   /** Whether this member is abstract. */
   def isAbstract: Boolean
-
+  
+  /** If this member originates from an implicit conversion of the current class to something else we set the 
+   *  implicit information to the correct origin */
+  def implicitConversion: Option[ImplicitConversion]
 }
 object MemberEntity {
   // Oh contravariance, contravariance, wherefore art thou contravariance?
@@ -304,10 +307,6 @@ trait NonTemplateMemberEntity extends MemberEntity {
   /** Whether this member is a bridge member. A bridge member does only exist for binary compatibility reasons
     * and should not appear in ScalaDoc. */
   def isBridge: Boolean
-    
-  /** If this member originates from an implicit conversion of the current class to something else we set the 
-   *  implicit information to the correct origin */
-  def implicitConversion: Option[ImplicitConversion]
 }
 
 
@@ -421,8 +420,11 @@ trait ImplicitConversion {
   def target: TypeEntity
   
   /** The entity that performed the conversion */
-  def convertor: Body   
+  def convertor: Body // TODO: Make this Option[MemberEntity] so we can link the method  
   
   /** The constraints that the transformations puts on the type parameters */
-  def constraints: Body
+  def constraints: Body // TODO: Make this List[ConstraintEntity]
+  
+  /** The body of the comment */
+  def getBody: Body
 }

@@ -60,6 +60,7 @@ object C extends A
  *  - tests simple inheritance and asSeenFrom
  *  - A, B and C should be implicitly converted to this */
 class PimpedA[V](a: A[V]) {
+  /** The inheritedByImplicitConversionToPimpedA: V documentation... */ 
   def inheritedByImplicitConversionToPimpedA: V = sys.error("Not implemented")
 }
 
@@ -67,6 +68,7 @@ class PimpedA[V](a: A[V]) {
  *  - tests the implicit conversion between parametric and fixed types
  *  - A, B and C should be implicitly converted to this */
 class NumericA[U: Numeric](a: A[U]) {
+  /** The inheritedByImplicitConversionToNumericA: U documentation... */ 
   def inheritedByImplicitConversionToNumericA: U = implicitly[Numeric[U]].zero
 }
 
@@ -74,14 +76,16 @@ class NumericA[U: Numeric](a: A[U]) {
  *  - tests the interaction between implicit conversion and specific types
  *  - A and C should be implicitly converted to this */
 class IntA(a: A[Int]) {
- def inheritedByImplicitConversionToIntA: Int = 0
+  /** The inheritedByImplicitConversionToIntA: Int documentation... */ 
+  def inheritedByImplicitConversionToIntA: Int = 0
 }
 
 /** GtColonDoubleA class <br/>
  *  - tests the interaction between implicit conversion and existential types
  *  - A and B should be implicitly converted to this */
 class GtColonDoubleA(a: A[T] forSome { type T <: Double }) {
- def inheritedByImplicitConversionToGtColonDoubleA: Double = 0
+  /** The inheritedByImplicitConversionToGtColonDoubleA: Double documentation... */ 
+  def inheritedByImplicitConversionToGtColonDoubleA: Double = 0
 }
 
 
