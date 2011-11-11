@@ -74,6 +74,7 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
     val modelFactory = (
       new { override val global: compiler.type = compiler }
         with model.ModelFactory(compiler, settings)
+        with model.ModelFactoryImplicitSupport
         with model.comment.CommentFactory
         with model.TreeFactory {
           override def templateShouldDocument(sym: compiler.Symbol) =

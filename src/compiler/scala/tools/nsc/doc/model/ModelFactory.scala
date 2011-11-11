@@ -17,7 +17,7 @@ import model.{ RootPackage => RootPackageEntity }
 
 /** This trait extracts all required information for documentation from compilation units */
 class ModelFactory(val global: Global, val settings: doc.Settings) {
-  thisFactory: ModelFactory with CommentFactory with TreeFactory =>
+  thisFactory: ModelFactory with CommentFactory with TreeFactory with ModelFactoryImplicitSupport =>
 
   import global._
   import definitions.{ ObjectClass, ScalaObjectClass, RootPackage, EmptyPackage, NothingClass, AnyClass, AnyValClass, AnyRefClass }
@@ -263,14 +263,17 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
     }
     def subClasses = if (subClassesCache == null) Nil else subClassesCache.toList
 
-    protected lazy val memberSyms =             
+    lazy protected val memberSyms =             
       // Only this class's constructors are part of its members, inherited constructors are not.
       sym.info.members.filter(s => localShouldDocument(s) && (!s.isConstructor || s.owner == sym))
     
     val memberNames = sym.info.members.map(_.name).toSet
     val implicitMembers = membersByImplicitConversions(sym, this).filterNot { case (sym, implConv) => memberNames.contains(sym.name) }
     
-    val members       = (memberSyms flatMap (makeMember(_, null, this))) ::: (implicitMembers flatMap { case (sym, implConv) => makeMember(sym, implConv, this) })
+    val membersMap    = (memberSyms      flatMap { case sym             => makeMember(sym, null, this).map((sym, _))}) ::: 
+    										(implicitMembers flatMap { case (sym, implConv) => makeMember(sym, implConv, this).map((sym, _))})
+    
+    val members       = membersMap.map({case (sym, tpl) => tpl})
     val templates     = members collect { case c: DocTemplateEntity => c }
     val methods       = members collect { case d: Def => d }
     val values        = members collect { case v: Val => v }
@@ -738,178 +741,6 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
 
   def localShouldDocument(aSym: Symbol): Boolean = {
     !aSym.isPrivate && (aSym.isProtected || aSym.privateWithin == NoSymbol) && !aSym.isSynthetic
-  }
-  
-  def implicitShouldDocument(aSym: Symbol): Boolean = {
-  	// We shouldn't document:
-  	// - constructors
-		// - common methods (in Any, AnyRef, Object) as they are automatically removed
-  	// - private and protected members (not accessible following an implicit conversion)
-  	// - members starting with _ (usually reserved for internal stuff)
-    localShouldDocument(aSym) && (!aSym.isConstructor) && (aSym.owner != ObjectClass) && (aSym.owner != AnyClass) && (aSym.owner != AnyRefClass) && 
-    (!aSym.isProtected) && (!aSym.isPrivate) && (!aSym.name.toString.startsWith("_"))
-  }
-  
-  def membersByImplicitConversions(sym: Symbol, inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {
-    if (!(sym.isClass || sym.isTrait))
-      Nil
-    else {
-      println("\n\n" + sym.nameString + "\n" + "=" * sym.nameString.length())
-      
-      val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)            
-      val result = global.analyzer.allViewsFrom(sym.tpe, context, sym.typeParams)
-      
-      result flatMap { case (result, constr) => getMembersSymbols(sym.tpe, context, sym.typeParams, result, constr, inTpl) }
-    }
-  }
-  
-  def getMembersSymbols(tp: Type, 
-  										  context: global.analyzer.Context, 
-  										  tpars: List[Symbol], 
-  										  res: global.analyzer.SearchResult, 
-  										  constrs: List[TypeConstraint], 
-  										  inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {
-
-  	// The implicit constraints: we gather constraints about the type. The constraints can be of several types:
-  	//  - the existence of implicit parameters of certain types (see removeImplicitParameters)
-    //  - type bounds and type substitutions
-  	var constraints: List[Block] = Nil  	
-
-  	// This function removes implicit values from the view and adds them as constraints
-  	def removeImplicitParameters(ty: Type): Type = ty match {
-  		case MethodType(params, resultType) if (params.filter(_.isImplicit).length == 0) =>
-  			MethodType(params, removeImplicitParameters(resultType))
-		  case MethodType(params, resultType) if (params.filterNot(_.isImplicit).length == 0) =>
-		    constraints = constraints ::: params.map(param => Paragraph(Chain(Text("An implicit value of type ")::Monospace(Text(typeVarToOrigin(param.tpe).toString))::Text(" is in scope.")::Nil)))
-		    removeImplicitParameters(resultType)
-		  case other =>
-		    other // It might be a class, a method or anything else it wants to be, we just strip all implicit params
-  	}  	
-
-    // we don't want typeVars, we want our original type params back
-	  object typeVarToOrigin extends TypeMap {
-	    def apply(tp: Type): Type = mapOver(tp) match {	      	
-        case tv: TypeVar =>
-        	if (tv.constr.inst.typeSymbol == NothingClass)
-        		WildcardType
-      		else
-      			tv.origin //appliedType(tv.origin.typeConstructor, tv.typeArgs map this)
-        case other =>
-        	if (other.typeSymbol == NothingClass)
-        		WildcardType
-      		else
-      			other	      
-	    }
-	  }
-
-	  object wildcardToNothing extends TypeMap {
-	    def apply(tp: Type): Type = mapOver(tp) match {	      	
-        case WildcardType =>
-        	NothingClass.tpe
-        case other =>
-    			other	      
-	    }
-	  }
-
-  	// obtain the result after applying the view
-    val typed: Tree = if (res.tree != EmptyTree) {
-    	// here we need to remove all implicits and add them as constraints
-    	val coercion = res.tree.setType(removeImplicitParameters(res.tree.tpe))
-
-    	// and get the view applied to an argument
-      val viewApply = new ApplyImplicitView(coercion, List(Ident("<argument>") setType coercion.tpe.paramTypes.head))      
-      global.analyzer.newTyper(context.makeImplicit(context.reportAmbiguousErrors)).silent(_.typed(viewApply, global.analyzer.EXPRmode, WildcardType), false) match {
-          case ex: Throwable =>
-            println("typing coercion failed "+ ex)
-            coercion
-          case t: Tree => t
-        }
-    } else EmptyTree
-
-    def uniteConstraints(constr: TypeConstraint): TypeConstraint =
-      try {
-      	new TypeConstraint(List(wildcardToNothing(lub(constr.loBounds  map typeVarToOrigin))), 
-      									   List(wildcardToNothing(glb(constr.hiBounds  map typeVarToOrigin)))) 
-      	// BoundedWildcardType(TypeBounds(lub(constr.loBounds), glb(constr.hiBounds)))
-      } catch { 
-      	// does this actually ever happen? (probably when type vars occur in the bounds)	
-      	case x: Throwable => new TypeConstraint(constr.loBounds.distinct, constr.hiBounds.distinct) 
-      } 
-
-    // the type vars need to be propagated until we ask for the members, then you can replace them by some simplified representation
-    // in principle, we should solve the set of type variables, but this is unlikely to work since we can't really know any of them concretely
-    // for now, just simplify them, and if their upper bounds =:= lower bounds, replace by that type,
-    // else, if the lub and the glb could be computed, use an existential with the given lower and upper bound
-    // if all that fails, you'll need some textual representation of the TypeConstraint
-    val toTp = typeVarToOrigin(typed.tpe.finalResultType)
-    println("conversion "+ typed.symbol +" from "+ tp +" to "+ toTp)
-    
-    // Transform bound constraints into scaladoc constraints
-    val boundConstraints = (tpars zip (constrs map uniteConstraints)) flatMap {
-    	case (tp, constr) => {
-
-    		// Pretty name for the type 
-    		val tpString: String = tp match {
-    			case ts: TypeSymbol => ts.name.toString
-    			case _ => tp.toString
-    		}
-
-    		(constr.loBounds, constr.hiBounds) match {
-    			// Most generic bounds
-    			case (List(lb), List(ub)) if ((lb == NothingClass.tpe) && (ub == AnyClass.tpe)) =>
-		    		Nil
-		      // Same bound on both sides => equality
-		    	case (List(lb), List(ub)) if (lb == ub) =>		    		
-		    		List(Paragraph(Chain(Text(tpString + " is equal to " + lb + ": ")::Monospace(Text(tpString + " =: " + lb))::Nil)))
-		    	// Only lower bound
-		    	case (List(lb), List(ub)) if (ub == AnyClass.tpe) =>
-		    		List(Paragraph(Chain(Text(tpString + " is lower bounded by " + lb + ": ")::Monospace(Text(tpString + " >: " + lb))::Nil)))
-		    	// Only upper bound
-		    	case (List(lb), List(ub)) if (lb == NothingClass.tpe) =>
-		    		List(Paragraph(Chain(Text(tpString + " is upper bounded by " + ub + ": ")::Monospace(Text(tpString + " <: " + ub))::Nil)))
-		    	// Single bounds, not obvious
-		    	case (List(lb), List(ub)) =>
-		    		List(Paragraph(Chain(Text(tpString + " is bounded by " + lb + " and " + ub + ": ")::Monospace(Text(tpString + " >: " + lb + " <: " + ub))::Nil)))
-		    	// Multiple bounds - the complex case, shouldn't occur in practice
-		    	case _ =>
-		    		List(Paragraph(Chain(Text("Complex constraint: ")::Monospace(Text(tpString + " " + constr))::Nil)))
-    		}
-    	}
-  	}
-    
-    // Transform res.subst substitutions into scaladoc constraints
-    val substConstraints = (res.subst.from zip res.subst.to) flatMap { case (from, to) =>
-    	List(Paragraph(Chain(Text("Substitute type of ")::Monospace(Text(from.toString))::Text(" to ")::Monospace(Text(to.toString))::Nil)))
-    	
-    }
-    
-    constraints = constraints ::: boundConstraints ::: substConstraints
-    constraints foreach println
-    
-    val implicitMembers = toTp.nonPrivateMembers. 
-    											  filter(implicitShouldDocument(_)).
-    											  map { symbol => symbol.cloneSymbol.setInfo(toTp memberInfo symbol) } 
-    
-    implicitMembers foreach (sym => println("  - "+ sym.decodedName +" : " + sym.info))
-    
-    // Create the implicit conversion object
-    val _constraints = constraints
-    val implicitConversion = new ImplicitConversion{ 
-										           val target = makeType(toTp, inTpl) 
-										           val convertor = Body(List(Code(res.tree.toString)))
-										           val constraints = Body(List(UnorderedList(_constraints)))
-										           val getBody = {
-										          	 val header = Paragraph(Bold(Chain(Text("Member inherited by implicit conversion to ")::Monospace(Text(target.toString()))::Text(" by ")::Monospace(Text(res.tree.symbol.toString))::Text(" in ")::Monospace(Text(res.tree.symbol.owner.toString))::Text(".")::Nil)))
-										          	 val constraints: List[Block] = _constraints.length match {
-										          		 case 0 => Nil
-										          		 case 1 => List(Paragraph(Text("The implicit conversion will take place only if: ")), UnorderedList(_constraints.head :: Nil))
-										          		 case 2 => List(Paragraph(Text("The implicit conversion will take place only if all the constraints are satisfied:")), UnorderedList(_constraints)) 
-										          	 }
-										          	 Body(header :: constraints ::: HorizontalRule() :: Nil)
-										           }
-										         }
-    
-    implicitMembers.map((_, implicitConversion))
   }
 }
 

@@ -413,18 +413,29 @@ trait Annotation extends Entity {
 }
 
 
-/** A trait that offers more information on implicit conversions */
+/** A trait that signals the member results from an implicit conversion */
 trait ImplicitConversion {
   
   /** The result type after the conversion */
   def target: TypeEntity
   
+  /** The entity for the method that performed the conversion, if it's documented (or just its name, otherwise) */
+  def convertorMethod: Either[MemberEntity, String]
+  		
   /** The entity that performed the conversion */
-  def convertor: Body // TODO: Make this Option[MemberEntity] so we can link the method  
+  def convertorOwner: TemplateEntity    
   
   /** The constraints that the transformations puts on the type parameters */
-  def constraints: Body // TODO: Make this List[ConstraintEntity]
+  def constraints: List[ConstraintEntity]
   
   /** The body of the comment */
   def getBody: Body
+}
+
+
+/** A trait that encapsulates a constraint necessary for implicit conversion */
+trait ConstraintEntity {
+	
+	/** Returns the constraint text representing the actual constraint */
+	def getConstraintText: Block
 }
