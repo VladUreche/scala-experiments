@@ -22,6 +22,13 @@ trait ModelFactoryImplicitSupport {
   import definitions.{ ObjectClass, ScalaObjectClass, RootPackage, EmptyPackage, NothingClass, AnyClass, AnyValClass, AnyRefClass }
   import model.comment.Block // shadow global's Block
   
+  // debugging:
+  val DEBUG = false
+
+  @inline
+  def debug(msg: => String) =
+  	if (DEBUG)
+  		println(msg)
   
   /* ============== IMPLEMENTATION PROVIDING ENTITY TYPES ============== */  
 
@@ -48,35 +55,42 @@ trait ModelFactoryImplicitSupport {
 
 	class ImplicitInScopeConstraint(sym: Symbol, inTpl: => TemplateImpl) extends ConstraintEntity {
 		def getConstraintText: Block = Paragraph(Chain(Text("An implicit value of type ")::Monospace(Text(sym.tpe.toString))::Text(" is in scope.")::Nil))
+		override def toString = "An implicit value of type " + sym.tpe.toString + " is in scope"
 	}
 
   class BoundConstraint(tp: Type, ub: Type, lb: Type, inTpl: => TemplateImpl) extends ConstraintEntity {
 		def getConstraintText: Block = Paragraph(Chain(Text(tp + " is bounded by " + lb + " and " + ub + ": ") :: Monospace(Text(tp + " >: " + lb + " <: " + ub))::Nil)) 
+		override def toString = tp + " >: " + lb + " <: " + ub
   }
 	
   class EqualityConstraint(tp: Type, tp2: Type, inTpl: => TemplateImpl) extends ConstraintEntity {
-		def getConstraintText: Block = Paragraph(Chain(Text(tp + " is equal to " + tp2 + ": ")::Monospace(Text(tp + " =: " + tp2))::Nil)) 
+		def getConstraintText: Block = Paragraph(Chain(Text(tp + " is equal to " + tp2 + ": ")::Monospace(Text(tp + " =: " + tp2))::Nil))
+		override def toString = tp + " =: " + tp2
   }
 
   class UpperBoundedConstraint(tp: Type, ub: Type, inTpl: => TemplateImpl) extends ConstraintEntity {
-		def getConstraintText: Block = Paragraph(Chain(Text(tp + " is upper bounded by " + ub + ": ")::Monospace(Text(tp + " <: " + ub))::Nil)) 
+		def getConstraintText: Block = Paragraph(Chain(Text(tp + " is upper bounded by " + ub + ": ")::Monospace(Text(tp + " <: " + ub))::Nil))
+		override def toString = tp + " <: " + ub
   }
   
   class LowerBoundedConstraint(tp: Type, lb: Type, inTpl: => TemplateImpl) extends ConstraintEntity {
-		def getConstraintText: Block = Paragraph(Chain(Text(tp + " is lower bounded by " + lb + ": ")::Monospace(Text(tp + " >: " + lb))::Nil)) 
+		def getConstraintText: Block = Paragraph(Chain(Text(tp + " is lower bounded by " + lb + ": ")::Monospace(Text(tp + " >: " + lb))::Nil))
+		override def toString = tp + " >: " + lb
   }
 
   class ComplexBoundsConstraint(tp: Type, constr: TypeConstraint, inTpl: => TemplateImpl) extends ConstraintEntity {
-		def getConstraintText: Block = Paragraph(Chain(Text("Complex constraint: ")::Monospace(Text(tp + " " + constr))::Nil)) 
+		def getConstraintText: Block = Paragraph(Chain(Text("Complex constraint: ")::Monospace(Text(tp + " " + constr))::Nil))
+		override def toString = "Complex constraint: " + constr
   }
 
   class SubstitutionConstraint(from: Symbol, to: Type, inTpl: => TemplateImpl) extends ConstraintEntity {
-		def getConstraintText: Block = Paragraph(Chain(Text("Substitute type of ")::Monospace(Text(from.toString))::Text(" to ")::Monospace(Text(to.toString))::Nil)) 
+		def getConstraintText: Block = Paragraph(Chain(Text("Substitute type of ")::Monospace(Text(from.toString))::Text(" to ")::Monospace(Text(to.toString))::Nil))
+		override def toString = "Type substitution: " + from + " to " + to
   }
 
 	
   /* ============== MAKER METHODS ============== */
-  	
+  /** implicitShouldDocument decides whether a member inherited by implicit conversion should be documented */	
 	def implicitShouldDocument(aSym: Symbol): Boolean = {
   	// We shouldn't document:
   	// - constructors
@@ -87,12 +101,17 @@ trait ModelFactoryImplicitSupport {
     (!aSym.isProtected) && (!aSym.isPrivate) && (!aSym.name.toString.startsWith("_"))
   }
   
-  
+  /** membersByImplicitConversion returns all members obtained by implicit conversions to something else 
+   * 
+   *  A word about the scope of the implicit conversions: currently we look at a very basic context composed of the 
+   *  default Scala imports (Predef._ for example) and the companion object of the current class, if one exists. In the 
+   *  future we might want to extend this to more complex scopes.
+   */
   def membersByImplicitConversions(sym: Symbol, inTpl: => TemplateImpl): List[(Symbol, ImplicitConversion)] = {
     if (!(sym.isClass || sym.isTrait))
       Nil
     else {
-      println("\n\n" + sym.nameString + "\n" + "=" * sym.nameString.length())
+    	debug("\n\n" + sym.nameString + "\n" + "=" * sym.nameString.length())
       
       val context: global.analyzer.Context = global.analyzer.rootContext(NoCompilationUnit)            
       val result = global.analyzer.allViewsFrom(sym.tpe, context, sym.typeParams)
@@ -101,6 +120,34 @@ trait ModelFactoryImplicitSupport {
     }
   }
   
+  /** getMembersSymbols performs the heavier lifting to get the implicit listing:
+   * - for each possible conversion function (also called view) 
+   *    * figures out the final result of the view (to what is our class transformed?)
+   *    * figures out the necessary constraints on the type parameters (such as T <: Int) and the context (such as Numeric[T])
+   *    * lists all inherited members
+   * 
+   * What? in details: 
+   *  - say we start from a class A[T1, T2, T3, T4]
+   *  - we have an implicit function (view) in scope: 
+   *     def pimpA[T3 <: Long, T4](a: A[Int, Foo[Bar[X]], T3, T4])(implicit ev1: Manifest[T4], ev2: Numeric[T4]): PimpedA
+   *  - A is converted to PimpedA ONLY if a couple of constraints are satisfied:
+   *     * T1 must be equal to Int
+   *     * T2 must be equal to Foo[Bar[X]]
+   *     * T3 must be upper bounded by Long
+   *     * there must be evidence of Numeric[T4] and a Mainfest[T4] within scope
+   *  - the final type is PimpedA and A therefore inherits a couple of members from pimpedA
+   *  
+   * How?
+   * some notes:
+   *  - Scala's type inference will want to solve all type parameters down to actual types, but we only want constraints
+   * to maintain generality
+   *  - therefore, allViewsFrom wraps type parameters into "untouchable" type variables that only gather constraints,
+   * but are never solved down to a type
+   *  - these must be reverted back to the type parameters and the constraints must be extracted and simplified (this is
+   * done by the uniteConstraints and boundedTParamsConstraints. Be sure to check them out
+   *  - we also need to transform implicit parameters in the view's signature into constraints, such that Numeric[T4] 
+   * appears as a constraint 
+   */
   def getMembersSymbols(tp: Type, 
   										  context: global.analyzer.Context, 
   										  tpars: List[Symbol], 
@@ -112,13 +159,14 @@ trait ModelFactoryImplicitSupport {
   		Nil
 		else {
   	
-			// the full type can contain implicit parameters which we don't want
-			val coercion = res.tree  	
-	  	// and get the view applied to an argument
+			val (simplifiedType, implicitParamConstraints) = removeImplicitParameters(res.tree.tpe, inTpl)
+			val coercion = res.tree.setType(simplifiedType)  	
+	  
+			// and get the view applied to an argument
 	    val viewApply = new ApplyImplicitView(coercion, List(Ident("<argument>") setType coercion.tpe.paramTypes.head))      
 	    val typed: Tree = global.analyzer.newTyper(context.makeImplicit(context.reportAmbiguousErrors)).silent(_.typed(viewApply, global.analyzer.EXPRmode, WildcardType), false) match {
 	          case ex: Throwable =>
-	            println("typing coercion failed "+ ex)
+	            debug("typing coercion failed "+ ex)
 	            coercion
 	          case t: Tree => t
 	        }
@@ -130,24 +178,29 @@ trait ModelFactoryImplicitSupport {
 	    // if all that fails, you'll need some textual representation of the TypeConstraint
 	    val toTp = typeVarToOriginOrWildcard(typed.tpe.finalResultType)
 	    val fullTpe = wildcardToNothing(typeVarToOriginOrWildcard(typed.tpe))
-	    println("conversion "+ typed.symbol +" from "+ tp +" to "+ toTp)
-	
+
 	    // Transform bound constraints into scaladoc constraints
-			val implicitParamConstraints = implicitParametersToConstraints(fullTpe, inTpl)
 	    val boundConstraints = boundedTParamsConstraints(tpars, constrs, inTpl) 
 	    val substConstraints = (res.subst.from zip res.subst.to) map { case (from, to) => new SubstitutionConstraint(from, to, inTpl) }    
-	    val constraints = implicitParamConstraints ::: boundConstraints ::: substConstraints
-	    constraints foreach println
-     
+	    val constraints = implicitParamConstraints ::: boundConstraints ::: substConstraints	   
+	    
+     	// Obtain the implicit members    
 	    val implicitMembers = toTp.nonPrivateMembers. 
 	    											  filter(implicitShouldDocument(_)).
 	    											  map { symbol => symbol.cloneSymbol.setInfo(toTp memberInfo symbol) }
 	    
-	    implicitMembers foreach (sym => println("  - "+ sym.decodedName +" : " + sym.info))
+	    // Debugging part :)
+	    debug(" * conversion "+ typed.symbol +" from "+ tp +" to "+ toTp)
+	    debug("   -> full type: " + fullTpe)
+	    if (constraints.length != 0) {
+	    	debug("   -> constraints: ")	    
+	    	constraints foreach { constr => debug("      - " + constr) }
+	    }
+	    debug("   -> members:")
+	    implicitMembers foreach (sym => debug("      - "+ sym.decodedName +" : " + sym.info))
+	    debug("")
     	    
 	    // Create the implicit conversion object
-	    println("res.tree.getClass: " + res.tree.getClass())
-	    println("res.tree.symbol: " + res.tree.symbol)
 	    val implicitConversion = new ImplicitConversionImpl(res.tree.symbol, toTp, constraints, inTpl)
 	    
 	    implicitMembers.map((_, implicitConversion))
@@ -157,6 +210,17 @@ trait ModelFactoryImplicitSupport {
   
   /**
    * uniteConstraints takes a TypeConstraint instance and simplifies the constraints inside
+   *  
+   * Normally TypeConstraint contains multiple lower and upper bounds, and we want to reduce this to a lower and an 
+   * upper bound. Here are a couple of catches we need to be aware of:
+   *  - before finding a view (implicit method in scope that maps class A[T1,T2,.. Tn] to something else) the type
+   * parameters are transformed into "untouchable" type variables so that type inference does not attempt to 
+   * fully solve them down to a type but rather constrains them on both sides just enough for the view to be 
+   * applicable -- now, we want to transform those type variables back to the original type parameters
+   *  - some of the bounds fail type inference and therefore refer to Nothing => when performing unification (lub, glb)
+   * they start looking ugly => we (unsoundly) transform Nothing to WildcardType so we fool the unification algorithms
+   * into thinking there's nothing there
+   *  - we don't want the wildcard types surviving the unification so we replace them back to Nothings
    */
   def uniteConstraints(constr: TypeConstraint): TypeConstraint =
 	  try {
@@ -168,7 +232,8 @@ trait ModelFactoryImplicitSupport {
 	  } 
 
 	/** 
-	 * implicitParameterToConstraints transforms implicit parameters from the view result type into constraints
+	 * removeImplicitParameters transforms implicit parameters from the view result type into constraints and 
+	 * returns the simplified type of the view
 	 *  
 	 * for the example view:
 	 *   implicit def pimpMyClass[T](a: MyClass[T])(implicit ev: Numeric[T]): PimpedMyClass[T]
@@ -176,14 +241,24 @@ trait ModelFactoryImplicitSupport {
 	 *   (implicit ev: Numeric[T]): PimpedMyClass[T] 
 	 * and implicitParametersToConstraints will output a single constraint:
 	 *   ImplicitInScopeConstraint(ev: Numeric[T])
+	 * and will output the simplified type:
+	 *   MyClass[T] => PimpedMyClass[T]
 	 */
-	def implicitParametersToConstraints(ty: Type, inTpl: => TemplateImpl): List[ConstraintEntity] = ty match {
-	  case MethodType(params, resultType) if (params.filter(_.isImplicit).length != 0) =>
-	    params.map(param => new ImplicitInScopeConstraint(param, inTpl)) ::: implicitParametersToConstraints(resultType, inTpl)
+	def removeImplicitParameters(ty: Type, inTpl: => TemplateImpl): (Type, List[ConstraintEntity]) = ty match {
+		case MethodType(params, resultType) if (params.filter(_.isImplicit).length == 0) =>
+	    val (result, newConstraints) = removeImplicitParameters(typeVarToOriginOrWildcard(resultType), inTpl)
+			(MethodType(params, result), newConstraints)
+		case MethodType(params, resultType) if (params.filter(_.isImplicit).length != 0) =>
+	    val constraints = params.map(param => new ImplicitInScopeConstraint(param, inTpl))
+	    val (result, newConstraints) = removeImplicitParameters(typeVarToOriginOrWildcard(resultType), inTpl)
+	    (result, constraints:::newConstraints)
 	  case other =>
-	    Nil
+	    (other, Nil)
 	}  	
 	
+	/**
+	 * boundedTParamsConstraints creates the constraints for the type parameters of the implicitly converted class
+	 */
 	def boundedTParamsConstraints(tpars: List[Symbol], constrs: List[TypeConstraint], inTpl: => TemplateImpl) = 
 		(tpars zip (constrs map uniteConstraints)) flatMap {
 	  	case (param, constr) => {
@@ -205,7 +280,10 @@ trait ModelFactoryImplicitSupport {
 	  	}
 		}
 	
-  // we don't want typeVars, we want our original type params back
+  /**
+   * typeVarsToOriginOrWildcard transforms the "untouchable" type variables into either their origins (the original
+   * type parameters) or into wildcard types if nothing matches
+   */
   object typeVarToOriginOrWildcard extends TypeMap {
     def apply(tp: Type): Type = mapOver(tp) match {	      	
       case tv: TypeVar =>
@@ -221,6 +299,9 @@ trait ModelFactoryImplicitSupport {
     }
   }
 
+  /**
+   * wildcardToNothing transforms wildcard types back to Nothing
+   */
   object wildcardToNothing extends TypeMap {
     def apply(tp: Type): Type = mapOver(tp) match {	      	
       case WildcardType =>
@@ -229,10 +310,4 @@ trait ModelFactoryImplicitSupport {
   			other	      
     }
   }
-  
-  def getTypeString(tp: Symbol) = tp match {
-		case ts: TypeSymbol => ts.name.toString
-		case _ => tp.toString
-	}
-
 }
