@@ -252,8 +252,8 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
 
   def memberToUseCaseCommentHtml(mbr: MemberEntity, isSelf: Boolean): NodeSeq = {
     mbr match {
-      case nte: NonTemplateMemberEntity if nte.isUseCase =>
-        inlineToHtml(comment.Text("[use case] "))
+      case nte: NonTemplateMemberEntity if nte.isUseCase =>        
+      	inlineToHtml(comment.Text("[use case] "))
       case _ => NodeSeq.Empty
     }
   }
@@ -339,6 +339,20 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
       }
     } 
 
+    val fullSignature: Seq[scala.xml.Node] = mbr match {
+    	case ntme: NonTemplateMemberEntity => ntme.useCaseOf match { 
+	    	case None =>
+	    		NodeSeq.Empty
+	    	case Some(fullSig) => {
+    			<dt>Full Signature</dt>
+    			<dd>
+	    			{ memberToHtml(fullSig) }
+    			</dd>
+	      }
+	    }
+    	case _ => NodeSeq.Empty
+    }
+    
     val selfType: Seq[scala.xml.Node] = mbr match {
       case dtpl: DocTemplateEntity if (isSelf && !dtpl.selfType.isEmpty && !isReduced) =>
         <dt>Self Type</dt>
@@ -458,7 +472,7 @@ class Template(tpl: DocTemplateEntity) extends HtmlPage {
     } 
     // end attributes block vals ---
 
-    val attributesInfo = attributes ++ definitionClasses ++ selfType ++ annotations ++ deprecation ++ migration ++ sourceLink ++ mainComment
+    val attributesInfo = attributes ++ definitionClasses ++ fullSignature ++ selfType ++ annotations ++ deprecation ++ migration ++ sourceLink ++ mainComment
     val attributesBlock =
       if (attributesInfo.isEmpty)
         NodeSeq.Empty
