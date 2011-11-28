@@ -1408,7 +1408,7 @@ DOCUMENTATION
   <target name="docs.lib" depends="docs.pre-lib" unless="docs.lib.available">
     <stopwatch name="docs.lib.timer"/>
     <mkdir dir="${build-docs.dir}/library"/>
-    <scaladoc
+    <!--<scaladoc
       destdir="${build-docs.dir}/library"
       doctitle="Scala Standard Library"
       docversion="${version.number}"
@@ -1434,7 +1434,7 @@ DOCUMENTATION
       <exclude name="runtime/ScalaRunTime.scala"/>
       <exclude name="runtime/StringAdd.scala"/>
       <exclude name="scala/swing/test/**"/>
-    </scaladoc>
+    </scaladoc>-->
     <touch file="${build-docs.dir}/library.complete" verbose="no"/>
     <stopwatch name="docs.lib.timer" action="total"/>
   </target>
@@ -1447,12 +1447,12 @@ DOCUMENTATION
 
   <target name="docs.manmaker" depends="docs.pre-man" unless="docs.man.available">
     <mkdir dir="${build.dir}/manmaker/classes"/>
-    <scalac
+    <!--<scalac
       destdir="${build.dir}/manmaker/classes"
       classpathref="pack.classpath"
       srcdir="${src.dir}/manual"
       includes="**/*.scala"
-      addparams="${scalac.args.all}"/>
+      addparams="${scalac.args.all}"/>-->
     <path id="manual.classpath">
       <pathelement location="${build-pack.dir}/lib/scala-library.jar"/>
       <pathelement location="${build.dir}/manmaker/classes"/>
@@ -1463,14 +1463,14 @@ DOCUMENTATION
     <mkdir dir="${build-docs.dir}/manual/man/man1"/>
     <mkdir dir="${build-docs.dir}/manual/html"/>
     <mkdir dir="${build-docs.dir}/manual/genman/man1"/>
-    <taskdef name="genman"
+    <!--<taskdef name="genman"
              classname="scala.tools.docutil.ManMaker"
              classpathref="manual.classpath"/>
     <genman command="fsc, sbaz, scala, scalac, scaladoc, scalap"
             htmlout="${build-docs.dir}/manual/html"
-            manout="${build-docs.dir}/manual/genman"/>
+            manout="${build-docs.dir}/manual/genman"/>-->
     <!-- On Windows source and target files can't be the same ! -->
-    <fixcrlf
+    <!--<fixcrlf
       srcdir="${build-docs.dir}/manual/genman"
       destdir="${build-docs.dir}/manual/man"
       eol="unix" includes="**/*.1"/>
@@ -1481,7 +1481,7 @@ DOCUMENTATION
         <include name="**/*.gif"/>
         <include name="**/*.png"/>
       </fileset>
-    </copy>
+    </copy>-->
     <touch file="${build-docs.dir}/manual.complete" verbose="no"/>
   </target>
 
