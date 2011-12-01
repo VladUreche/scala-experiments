@@ -3805,7 +3805,9 @@ trait Typers extends Modes with Adaptations with PatMatVirtualiser {
                 val res0 =
                   if (useTry) tryTypedApply(stabilized, args)
                   else doTypedApply(tree, stabilized, args, mode, pt)
-                assert(!(mayUnVirtualizeOverloaded && syms.nonEmpty) || res0.symbol == syms.head, "overload resolution changed"+ (syms map(_.fullLocationString), res0.symbol.fullLocationString))
+                
+                // Harmless according to Adriaan :)
+                //assert(!(mayUnVirtualizeOverloaded && syms.nonEmpty) || res0.symbol == syms.head, "overload resolution changed"+ (syms map(_.fullLocationString), res0.symbol.fullLocationString))
 
                 res0 match {
                   case dyna.DynamicApplication(_, _) if isImplicitMethod(res0.tpe) =>
